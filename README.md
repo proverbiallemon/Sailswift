@@ -2,7 +2,7 @@
 
 Native macOS mod manager for **Ship of Harkinian** - built with Swift and SwiftUI.
 
-> **Built on the logic of [Saildeck-macOS](https://github.com/proverbiallemon/Saildeck-macOS)** - rewritten from Python/tkinter to native Swift for optimal Mac performance.
+> **Built on the logic of [Saildeck-macOS](https://github.com/proverbiallemon/Saildeck-macOS)** (itself a fork of the original [Saildeck](https://github.com/Wolfeni/Saildeck) by Wolfeni) - rewritten from Python/tkinter to native Swift for optimal Mac performance.
 
 **Why Sailswift over Saildeck?** Sailswift is the actively maintained version with more features and faster updates. As a native Swift app, it offers better performance, a more polished UI, and will continue to receive new features that may not be backported to the Python version.
 
@@ -16,11 +16,12 @@ Native macOS mod manager for **Ship of Harkinian** - built with Swift and SwiftU
 - **Custom URL Scheme** - One-click mod installation from GameBanana using `shipofharkinian://` links
 
 ### GameBanana Integration
-- Browse mods directly from the app
-- Search by name and filter by category
+- Browse mods directly from the app with pre-loaded mod cache
+- Instant local fuzzy filtering by name and author
 - Download with progress tracking
 - Automatic ZIP extraction using native tools
 - One-click install from GameBanana website via custom URL scheme
+- Import confirmation dialog showing mod details before download
 
 ### Native Mac Experience
 - **Instant Startup** - No interpreter overhead
@@ -71,14 +72,14 @@ Download the latest release from the [Releases](https://github.com/proverbiallem
 #### Method 2: One-Click Install (URL Scheme)
 Sailswift registers the `shipofharkinian://` URL scheme for seamless mod installation:
 
-- **URL Format**: `shipofharkinian://https//gamebanana.com/mmdl/{itemId},{itemType},{fileId}`
+- **URL Format**: `shipofharkinian://https//gamebanana.com/mmdl/{fileId},{itemType},{modId}`
 - **Usage**: Click a compatible link on GameBanana or other websites
-- **Example**: `shipofharkinian://https//gamebanana.com/mmdl/1593301,Mod,640119`
+- **Example**: `shipofharkinian://https//gamebanana.com/mmdl/1513584,Mod,578470`
 
 When you click a `shipofharkinian://` link:
-1. Sailswift will automatically open (if not already running)
-2. The mod file will be downloaded in the background
-3. ZIP files are automatically extracted to the mods directory
+1. Sailswift will automatically open (or bring to front if already running)
+2. An import confirmation dialog shows mod details (thumbnail, name, author, file info)
+3. Click "Install" to download - ZIP files are automatically extracted to the mods directory
 4. You'll receive a notification when installation completes
 
 ### Mod Profiles
@@ -117,8 +118,10 @@ Sailswift/
 
 ### Key Implementation Notes
 - **App Sandbox**: Disabled (`com.apple.security.app-sandbox = false`) to allow full access to `~/Library/Application Support/com.shipofharkinian.soh/mods/`
+- **Single Window**: Uses SwiftUI `Window` (not `WindowGroup`) + `LSMultipleInstancesProhibited` for proper single-instance behavior
 - **Archive Extraction**: Uses native `/usr/bin/ditto` command for ZIP extraction
-- **URL Scheme**: Registered in `Info.plist` and handled in `SailswiftApp.swift`
+- **URL Scheme**: Registered in `Info.plist` and handled in `SailswiftApp.swift` with import confirmation
+- **Mod Cache**: `GameBananaModCache` singleton pre-loads all mods for instant local fuzzy filtering
 - **Async/Await**: All I/O operations use modern Swift concurrency
 - **No External Dependencies**: Pure Swift/SwiftUI implementation
 
@@ -136,11 +139,13 @@ Sailswift/
 
 ## Development Status
 
-### Implemented Features
+### Implemented Features ✅
 - Core mod management (enable/disable/delete)
 - Hierarchical folder tree view with state tracking
-- GameBanana API integration (browse, search, download)
-- Custom URL scheme handler (`shipofharkinian://`)
+- GameBanana API integration (browse, filter, download)
+- GameBanana mod cache with local fuzzy filtering
+- Custom URL scheme handler (`shipofharkinian://`) with import confirmation
+- Single-window behavior (URL scheme uses existing window)
 - Game launcher with AltAssets auto-configuration
 - Mod profile data models and persistence
 - ZIP archive extraction
@@ -172,14 +177,19 @@ Sailswift/
 The `shipofharkinian://` URL scheme allows external applications and websites to trigger mod downloads:
 
 1. **Registration**: Defined in `Info.plist` under `CFBundleURLTypes`
-2. **Handler**: Implemented in `SailswiftApp.swift` using `.onOpenURL()`
-3. **Parser**: Extracts itemId, itemType, and fileId from the URL
-4. **Downloader**: Calls `GameBananaAPI.fetchFileInfo()` then `DownloadManager.downloadFile()`
+2. **Single Instance**: `LSMultipleInstancesProhibited` ensures existing window is reused
+3. **Handler**: Implemented in `SailswiftApp.swift` using `.onOpenURL()` with `Window` scene
+4. **Parser**: Extracts fileId, itemType, and modId from the URL
+5. **Confirmation**: Shows `ImportConfirmationView` with mod thumbnail, details, and file info
+6. **Downloader**: After user confirms, calls `GameBananaAPI.fetchFileInfo()` then `DownloadManager.downloadFile()`
 
 **URL Structure Breakdown**:
 ```
-shipofharkinian://https//gamebanana.com/mmdl/{itemId},{itemType},{fileId}
+shipofharkinian://https//gamebanana.com/mmdl/{fileId},{itemType},{modId}
                   ^^^^^-- Note: Double slash is intentional for URL parsing
+
+Example: shipofharkinian://https//gamebanana.com/mmdl/1513584,Mod,578470
+         fileId=1513584, itemType=Mod, modId=578470
 ```
 
 ### App Sandbox Consideration
