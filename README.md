@@ -193,9 +193,7 @@ Example: shipofharkinian://https//gamebanana.com/mmdl/1513584,Mod,578470
 ```
 
 ### App Sandbox Consideration
-This app disables the App Sandbox to access the Ship of Harkinian mods directory directly. While this reduces security isolation, it's necessary for seamless mod management without requiring user file selection for every operation.
-
-If distributing through the Mac App Store, this would need to be refactored to use security-scoped bookmarks or move to a sandboxed mods directory.
+This app disables the App Sandbox to access the Ship of Harkinian mods directory directly. While this reduces security isolation, it's necessary for seamless mod management without requiring user file selection for every operation. This is why Sailswift is distributed directly rather than through the Mac App Store.
 
 ## Related Projects
 
