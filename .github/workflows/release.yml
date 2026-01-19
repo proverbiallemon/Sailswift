@@ -47,6 +47,7 @@ jobs:
         run: |
           curl -LO https://github.com/sparkle-project/Sparkle/releases/download/2.6.4/Sparkle-2.6.4.tar.xz
           tar -xf Sparkle-2.6.4.tar.xz
+          ls -la bin/
 
       - name: Sign Update with EdDSA
         id: sign
@@ -59,8 +60,8 @@ jobs:
           # Get file size
           FILE_SIZE=$(stat -f%z "Sailswift-${{ steps.version.outputs.version }}.zip")
 
-          # Sign the update
-          SIGNATURE=$(./Sparkle-2.6.4/bin/sign_update "Sailswift-${{ steps.version.outputs.version }}.zip" -f sparkle_private_key.pem)
+          # Sign the update (tools extract to bin/ not Sparkle-2.6.4/bin/)
+          SIGNATURE=$(./bin/sign_update "Sailswift-${{ steps.version.outputs.version }}.zip" -f sparkle_private_key.pem)
 
           # Clean up private key
           rm sparkle_private_key.pem
