@@ -150,6 +150,9 @@ class GameBananaAPI {
             dateUpdated = Date(timeIntervalSince1970: TimeInterval(timestamp))
         }
 
+        // Get item type from _sModelName (e.g., "Mod", "Sound", "Skin")
+        let itemType = record["_sModelName"] as? String ?? "Mod"
+
         return GameBananaMod(
             modId: modId,
             name: record["_sName"] as? String ?? "Mod #\(modId)",
@@ -161,19 +164,44 @@ class GameBananaAPI {
             profileURL: URL(string: profileURLString)!,
             dateAdded: dateAdded,
             dateUpdated: dateUpdated,
-            hasFiles: record["_bHasFiles"] as? Bool ?? false
+            hasFiles: record["_bHasFiles"] as? Bool ?? false,
+            itemType: itemType
         )
     }
 
-    /// Fetch downloadable files for a mod
-    func fetchModFiles(modId: Int) async throws -> [GameBananaFile] {
-        let url = URL(string: "\(baseURL)/Mod/\(modId)/Files")!
-        let (data, _) = try await session.data(from: url)
+    /// Fetch downloadable files for a mod/sound/skin/etc.
+    func fetchModFiles(modId: Int, itemType: String = "Mod") async throws -> [GameBananaFile] {
+        // For Mod type, use the /Files endpoint
+        // For other types (Sound, Skin, etc.), fetch item with _aFiles property
+        if itemType == "Mod" {
+            let url = URL(string: "\(baseURL)/Mod/\(modId)/Files")!
+            let (data, _) = try await session.data(from: url)
 
-        guard let files = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-            return []
+            guard let files = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+                return []
+            }
+
+            return parseFileArray(files)
+        } else {
+            // For non-Mod types, fetch the item with _aFiles included
+            var components = URLComponents(string: "\(baseURL)/\(itemType)/\(modId)")!
+            components.queryItems = [
+                URLQueryItem(name: "_csvProperties", value: "_aFiles")
+            ]
+
+            let (data, _) = try await session.data(from: components.url!)
+
+            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let files = json["_aFiles"] as? [[String: Any]] else {
+                return []
+            }
+
+            return parseFileArray(files)
         }
+    }
 
+    /// Parse an array of file info dictionaries into GameBananaFile objects
+    private func parseFileArray(_ files: [[String: Any]]) -> [GameBananaFile] {
         return files.compactMap { fileInfo -> GameBananaFile? in
             guard let fileId = fileInfo["_idRow"] as? Int,
                   let downloadURLString = fileInfo["_sDownloadUrl"] as? String,
@@ -194,8 +222,8 @@ class GameBananaAPI {
     }
 
     /// Fetch mod details by ID
-    func fetchModDetails(modId: Int) async throws -> GameBananaMod? {
-        var components = URLComponents(string: "\(baseURL)/Mod/\(modId)")!
+    func fetchModDetails(modId: Int, itemType: String = "Mod") async throws -> GameBananaMod? {
+        var components = URLComponents(string: "\(baseURL)/\(itemType)/\(modId)")!
         components.queryItems = [
             URLQueryItem(name: "_csvProperties", value: "_idRow,_sName,_aSubmitter,_aPreviewMedia,_aRootCategory,_nViewCount,_nLikeCount,_sProfileUrl,_tsDateAdded,_tsDateUpdated")
         ]

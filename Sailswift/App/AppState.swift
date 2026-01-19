@@ -32,6 +32,7 @@ class AppState: ObservableObject {
     @Published var showDownloadAlert = false
     @Published var downloadAlertMessage = ""
     @Published var show7zMissingAlert = false
+    @Published var showUnrarMissingAlert = false
 
     // Import confirmation and download popover
     @Published var pendingImport: PendingImport?
@@ -99,6 +100,13 @@ class AppState: ObservableObject {
         downloadManager.on7zMissing = { [weak self] in
             Task { @MainActor in
                 self?.show7zMissingAlert = true
+            }
+        }
+
+        // Set up unrar missing callback
+        downloadManager.onUnrarMissing = { [weak self] in
+            Task { @MainActor in
+                self?.showUnrarMissingAlert = true
             }
         }
 
@@ -343,8 +351,8 @@ class AppState: ObservableObject {
 
         // Fetch mod details and all files in parallel
         do {
-            async let modTask = GameBananaAPI.shared.fetchModDetails(modId: Int(modId) ?? 0)
-            async let filesTask = GameBananaAPI.shared.fetchModFiles(modId: Int(modId) ?? 0)
+            async let modTask = GameBananaAPI.shared.fetchModDetails(modId: Int(modId) ?? 0, itemType: itemType)
+            async let filesTask = GameBananaAPI.shared.fetchModFiles(modId: Int(modId) ?? 0, itemType: itemType)
 
             let (mod, files) = try await (modTask, filesTask)
 
@@ -364,14 +372,15 @@ class AppState: ObservableObject {
     /// Handle import request from browse view (auto-select first file)
     func handleBrowseImport(mod: GameBananaMod) async {
         // Create pending import with first file selected by default
-        pendingImport = PendingImport(modId: String(mod.modId), itemType: "Mod", selectedFileId: "")
+        // Use the mod's actual item type (Mod, Sound, Skin, etc.)
+        pendingImport = PendingImport(modId: String(mod.modId), itemType: mod.itemType, selectedFileId: "")
         pendingImport?.mod = mod
         showImportConfirmation = true
         showDownloadPopover = true
 
-        // Fetch all files for this mod
+        // Fetch all files for this mod using the correct item type
         do {
-            let files = try await GameBananaAPI.shared.fetchModFiles(modId: mod.modId)
+            let files = try await GameBananaAPI.shared.fetchModFiles(modId: mod.modId, itemType: mod.itemType)
             pendingImport?.files = files
             if let firstFile = files.first {
                 pendingImport?.selectedFileId = String(firstFile.fileId)
@@ -443,27 +452,7 @@ class AppState: ObservableObject {
 
     // MARK: - 7-Zip Installation
 
-    /// Open Terminal with brew install command for 7-Zip
-    func install7zipViaHomebrew() {
-        let script = """
-        tell application "Terminal"
-            activate
-            do script "brew install 7zip"
-        end tell
-        """
-
-        if let appleScript = NSAppleScript(source: script) {
-            var error: NSDictionary?
-            appleScript.executeAndReturnError(&error)
-            if let error = error {
-                print("[AppState] AppleScript error: \(error)")
-                // Fallback: just open Terminal
-                NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app"))
-            }
-        }
-    }
-
-    /// Copy the brew install command to clipboard
+    /// Copy the brew install 7zip command to clipboard
     func copy7zipCommand() {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString("brew install 7zip", forType: .string)
@@ -473,5 +462,19 @@ class AppState: ObservableObject {
     /// Check if 7-Zip is available
     var is7zipInstalled: Bool {
         downloadManager.is7zAvailable()
+    }
+
+    // MARK: - unar Installation
+
+    /// Copy the brew install unar command to clipboard
+    func copyUnarCommand() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString("brew install unar", forType: .string)
+        statusMessage = "Command copied to clipboard"
+    }
+
+    /// Check if unar is available
+    var isUnarInstalled: Bool {
+        downloadManager.isUnarAvailable()
     }
 }

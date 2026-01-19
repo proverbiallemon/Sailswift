@@ -56,6 +56,9 @@ class DownloadManager: ObservableObject {
     /// Callback when 7-Zip is required but not installed
     var on7zMissing: (() -> Void)?
 
+    /// Callback when unrar is required (RAR uses unsupported compression)
+    var onUnrarMissing: (() -> Void)?
+
     init() {
         let config = URLSessionConfiguration.default
         config.httpAdditionalHeaders = ["User-Agent": "Sailswift/1.0"]
@@ -93,7 +96,6 @@ class DownloadManager: ObservableObject {
         downloads.append(download)
 
         do {
-            print("[DownloadManager] Starting download: \(file.downloadURL)")
 
             // Use bytes for progress tracking
             let (bytes, response) = try await session.bytes(from: file.downloadURL)
@@ -129,10 +131,8 @@ class DownloadManager: ObservableObject {
                 let computedMD5 = Insecure.MD5.hash(data: data)
                 let computedMD5String = computedMD5.map { String(format: "%02hhx", $0) }.joined()
                 if computedMD5String.lowercased() != file.md5.lowercased() {
-                    print("[DownloadManager] MD5 mismatch! Expected: \(file.md5), Got: \(computedMD5String)")
                     throw DownloadError.checksumMismatch
                 }
-                print("[DownloadManager] MD5 verified: \(computedMD5String)")
             }
 
             // Save to temp file
@@ -162,11 +162,12 @@ class DownloadManager: ObservableObject {
             }
 
         } catch DownloadError.sevenZipNotFound {
-            print("[DownloadManager] 7-Zip not found")
             updateDownloadStatus(fileId: file.fileId, status: .failed, message: "7-Zip required")
             on7zMissing?()
+        } catch DownloadError.rarMethodUnsupported {
+            updateDownloadStatus(fileId: file.fileId, status: .failed, message: "unrar required")
+            onUnrarMissing?()
         } catch {
-            print("[DownloadManager] Error: \(error)")
             updateDownloadStatus(fileId: file.fileId, status: .failed, message: error.localizedDescription)
             showResult(success: false, message: "Download failed: \(error.localizedDescription)")
         }
@@ -197,7 +198,10 @@ class DownloadManager: ObservableObject {
         }
 
         // If it's an archive, extract and find mod files
-        if lowercasedFilename.hasSuffix(".zip") || lowercasedFilename.hasSuffix(".7z") {
+        let isZip = lowercasedFilename.hasSuffix(".zip")
+        let is7z = lowercasedFilename.hasSuffix(".7z")
+        let isRar = lowercasedFilename.hasSuffix(".rar")
+        if isZip || is7z || isRar {
             let count = try await extractAndInstallMods(from: tempURL, to: modFolder)
             if count > 0 {
                 saveMetadata(modName: modName, modId: modId, to: modFolder)
@@ -238,11 +242,15 @@ class DownloadManager: ObservableObject {
 
         // Detect archive type and extract accordingly
         let lowercasedFilename = archiveURL.lastPathComponent.lowercased()
-        print("[DownloadManager] Extracting to: \(extractDir.path)")
+
+        let needs7z = lowercasedFilename.hasSuffix(".7z") || lowercasedFilename.hasSuffix(".rar")
 
         if lowercasedFilename.hasSuffix(".7z") {
             // Use 7-Zip for .7z files
             try await extract7z(from: archiveURL, to: extractDir)
+        } else if lowercasedFilename.hasSuffix(".rar") {
+            // For RAR files, try 7-Zip first, fall back to unrar
+            try await extractRar(from: archiveURL, to: extractDir)
         } else {
             // Use ditto for ZIP and other formats
             try await extractZip(from: archiveURL, to: extractDir)
@@ -309,11 +317,9 @@ class DownloadManager: ObservableObject {
     /// Extract a 7z archive using 7-Zip
     private func extract7z(from archiveURL: URL, to extractDir: URL) async throws {
         guard let sevenZipPath = find7zBinary() else {
-            print("[DownloadManager] 7-Zip not found")
             throw DownloadError.sevenZipNotFound
         }
 
-        print("[DownloadManager] Using 7-Zip at: \(sevenZipPath)")
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: sevenZipPath)
@@ -330,13 +336,96 @@ class DownloadManager: ObservableObject {
         if process.terminationStatus != 0 {
             let errorData = pipe.fileHandleForReading.readDataToEndOfFile()
             let errorString = String(data: errorData, encoding: .utf8) ?? "Unknown error"
-            print("[DownloadManager] 7z error: \(errorString)")
             throw DownloadError.extractionFailed
         }
     }
 
+    /// Extract a RAR archive - tries 7-Zip first, falls back to unrar
+    private func extractRar(from archiveURL: URL, to extractDir: URL) async throws {
+        // Try 7-Zip first (handles most RAR files)
+        if let sevenZipPath = find7zBinary() {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: sevenZipPath)
+            process.arguments = ["x", archiveURL.path, "-o\(extractDir.path)", "-y"]
+
+            let pipe = Pipe()
+            process.standardError = pipe
+            process.standardOutput = pipe
+
+            try process.run()
+            process.waitUntilExit()
+
+            if process.terminationStatus == 0 {
+                return
+            }
+
+            // 7-Zip failed, check if it's an unsupported method error
+            let errorData = pipe.fileHandleForReading.readDataToEndOfFile()
+            let errorString = String(data: errorData, encoding: .utf8) ?? ""
+
+            // If unsupported method, try unrar
+            if errorString.contains("Unsupported Method") {
+            } else {
+                // Other error, don't fall back
+                throw DownloadError.extractionFailed
+            }
+        }
+
+        // Try unar as fallback (or primary if 7-Zip not available)
+        guard let unarPath = findUnarBinary() else {
+            // If 7-Zip is available but failed, and unar isn't available
+            if find7zBinary() != nil {
+                throw DownloadError.rarMethodUnsupported
+            } else {
+                throw DownloadError.sevenZipNotFound
+            }
+        }
+
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: unarPath)
+        // -o = output directory, -f = force overwrite
+        process.arguments = ["-o", extractDir.path, "-f", archiveURL.path]
+
+        let pipe = Pipe()
+        process.standardError = pipe
+        process.standardOutput = pipe
+
+        try process.run()
+        process.waitUntilExit()
+
+        if process.terminationStatus != 0 {
+            let errorData = pipe.fileHandleForReading.readDataToEndOfFile()
+            let errorString = String(data: errorData, encoding: .utf8) ?? "Unknown error"
+            throw DownloadError.extractionFailed
+        }
+    }
+
+    /// Find unar binary - checks common Homebrew paths
+    private func findUnarBinary() -> String? {
+        let possiblePaths = [
+            "/opt/homebrew/bin/unar",        // Homebrew on Apple Silicon
+            "/usr/local/bin/unar",           // Homebrew on Intel
+            "/opt/local/bin/unar"            // MacPorts
+        ]
+
+        for path in possiblePaths {
+            if FileManager.default.isExecutableFile(atPath: path) {
+                return path
+            }
+        }
+
+        return nil
+    }
+
+    /// Check if unar is available on the system
+    func isUnarAvailable() -> Bool {
+        return findUnarBinary() != nil
+    }
+
     /// Find 7-Zip binary - checks bundled, then common Homebrew paths
     private func find7zBinary() -> String? {
+
         // Check if bundled with app
         if let bundledPath = Bundle.main.path(forResource: "7zz", ofType: nil) {
             if FileManager.default.isExecutableFile(atPath: bundledPath) {
@@ -355,7 +444,8 @@ class DownloadManager: ObservableObject {
         ]
 
         for path in possiblePaths {
-            if FileManager.default.isExecutableFile(atPath: path) {
+            let exists = FileManager.default.isExecutableFile(atPath: path)
+            if exists {
                 return path
             }
         }
@@ -495,13 +585,15 @@ class DownloadManager: ObservableObject {
 enum DownloadError: LocalizedError {
     case extractionFailed
     case sevenZipNotFound
+    case rarMethodUnsupported
     case checksumMismatch
     case zipSlipDetected
 
     var errorDescription: String? {
         switch self {
         case .extractionFailed: return "Failed to extract archive"
-        case .sevenZipNotFound: return "7-Zip is required to extract .7z files. Install via: brew install 7zip"
+        case .sevenZipNotFound: return "7-Zip is required to extract .7z and .rar files. Install via: brew install 7zip"
+        case .rarMethodUnsupported: return "This RAR file uses a compression method not supported by 7-Zip. Install unar via: brew install unar"
         case .checksumMismatch: return "Download verification failed - file may be corrupted or tampered"
         case .zipSlipDetected: return "Security error: Archive contains unsafe file paths"
         }

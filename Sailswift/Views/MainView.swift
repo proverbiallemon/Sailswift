@@ -99,15 +99,20 @@ struct MainView: View {
             Text(appState.downloadAlertMessage)
         }
         .alert("7-Zip Required", isPresented: $appState.show7zMissingAlert) {
-            Button("Install via Homebrew") {
-                appState.install7zipViaHomebrew()
-            }
             Button("Copy Command") {
                 appState.copy7zipCommand()
             }
             Button("Cancel", role: .cancel) { }
         } message: {
-            Text("This mod is packaged as a .7z archive which requires 7-Zip to extract.\n\nInstall it with Homebrew or copy the command to run manually.")
+            Text("This mod is packaged as a .7z archive which requires 7-Zip to extract.\n\nRun in Terminal: brew install 7zip")
+        }
+        .alert("unar Required", isPresented: $appState.showUnrarMissingAlert) {
+            Button("Copy Command") {
+                appState.copyUnarCommand()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This RAR file uses a compression method not supported by 7-Zip.\n\nRun in Terminal: brew install unar")
         }
     }
 
