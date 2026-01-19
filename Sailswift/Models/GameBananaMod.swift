@@ -13,6 +13,7 @@ struct GameBananaMod: Identifiable, Hashable {
     let dateAdded: Date?
     let dateUpdated: Date?
     let hasFiles: Bool
+    let itemType: String  // "Mod", "Sound", "Skin", etc.
 
     var id: Int { modId }
 
