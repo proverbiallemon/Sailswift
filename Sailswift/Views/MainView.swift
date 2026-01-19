@@ -361,17 +361,7 @@ struct GameBananaResultRow: View {
     var body: some View {
         HStack(spacing: 12) {
             // Thumbnail
-            AsyncImage(url: mod.imageURL) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().aspectRatio(contentMode: .fill)
-                default:
-                    Rectangle().fill(Color.gray.opacity(0.2))
-                }
-            }
-            .frame(width: 80, height: 60)
-            .cornerRadius(6)
-            .clipped()
+            ModThumbnailView(imageURL: mod.imageURL, itemType: mod.itemType, size: .medium)
 
             // Info
             VStack(alignment: .leading, spacing: 4) {
@@ -653,17 +643,7 @@ struct ImportPopoverView: View {
                     // Mod info header
                     HStack(alignment: .top, spacing: 12) {
                         if let mod = pending.mod {
-                            AsyncImage(url: mod.imageURL) { phase in
-                                switch phase {
-                                case .success(let image):
-                                    image.resizable().aspectRatio(contentMode: .fill)
-                                default:
-                                    Rectangle().fill(Color.gray.opacity(0.2))
-                                }
-                            }
-                            .frame(width: 60, height: 45)
-                            .cornerRadius(4)
-                            .clipped()
+                            ModThumbnailView(imageURL: mod.imageURL, itemType: mod.itemType, size: .small)
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(mod.name)
