@@ -12,6 +12,7 @@ Native macOS mod manager for **Ship of Harkinian** - built with Swift and SwiftU
 - **One-Click Install** - `shipofharkinian://` URL scheme for seamless installation
 - **Multiple Downloads** - Real-time progress tracking for simultaneous downloads
 - **ZIP & 7z Support** - Automatic extraction with 7-Zip auto-install prompt
+- **Auto-Updates** - Automatic update checking via Sparkle framework
 
 **[Full feature list →](https://github.com/proverbiallemon/Sailswift/wiki/Features)**
 
