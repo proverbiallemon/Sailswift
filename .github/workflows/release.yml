@@ -133,7 +133,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git fetch origin main
-          git checkout main
+          git checkout -f main
 
           # Restore the generated appcast
           cp /tmp/appcast.xml appcast.xml
