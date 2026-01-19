@@ -41,6 +41,19 @@ jobs:
             ONLY_ACTIVE_ARCH=NO \
             build
 
+      - name: Re-sign Frameworks and App
+        run: |
+          APP_PATH="build/Build/Products/Release/Sailswift.app"
+
+          # Re-sign Sparkle framework with ad-hoc signature
+          codesign --force --deep --sign - "$APP_PATH/Contents/Frameworks/Sparkle.framework"
+
+          # Re-sign the main app
+          codesign --force --deep --sign - "$APP_PATH"
+
+          # Verify
+          codesign --verify --deep --strict "$APP_PATH"
+
       - name: Create ZIP Archive
         run: |
           cd build/Build/Products/Release
