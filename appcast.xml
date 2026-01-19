@@ -7,13 +7,13 @@
         <language>en</language>
         <item>
             <title>Version 1.0.0-beta3</title>
-            <pubDate>Mon, 19 Jan 2026 08:58:51 +0000</pubDate>
+            <pubDate>Mon, 19 Jan 2026 09:03:40 +0000</pubDate>
             <sparkle:version>1.0.0-beta3</sparkle:version>
             <sparkle:shortVersionString>1.0.0-beta3</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
             <enclosure url="https://github.com/proverbiallemon/Sailswift/releases/download/v1.0.0-beta3/Sailswift-1.0.0-beta3.zip"
-                       sparkle:edSignature="PGZdxVku14Vz3eI31O0zvIl+GDivCupP/v+AxLctpVKMzi+QaoHUfEgWfBXN0WrpmtdPOw7lGsAv0JhshCpGCA=="
-                       length="1925055"
+                       sparkle:edSignature="R+1IeF73sGxfn84Cp2mFczkq2Hbo8QHff3xzwTWrMPxjUH4YhYyJ+bO5gsluLnEEJbqZ8Ey311HMKenNwoJXCQ=="
+                       length="1923510"
                        type="application/octet-stream" />
         </item>
     </channel>
