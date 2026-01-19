@@ -65,6 +65,13 @@ jobs:
           cd build/Build/Products/Release
           zip -r -y ../../../../Sailswift-${{ steps.version.outputs.version }}.zip Sailswift.app
 
+      - name: Create DMG
+        run: |
+          hdiutil create -volname "Sailswift" \
+            -srcfolder build/Build/Products/Release/Sailswift.app \
+            -ov -format UDZO \
+            Sailswift-${{ steps.version.outputs.version }}.dmg
+
       - name: Download Sparkle
         run: |
           curl -LO https://github.com/sparkle-project/Sparkle/releases/download/2.6.4/Sparkle-2.6.4.tar.xz
@@ -159,15 +166,22 @@ jobs:
           prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
           files: |
             Sailswift-${{ steps.version.outputs.version }}.zip
+            Sailswift-${{ steps.version.outputs.version }}.dmg
           body: |
             ## Sailswift v${{ steps.version.outputs.version }}
 
+            ### Downloads
+            - **DMG** (recommended): `Sailswift-${{ steps.version.outputs.version }}.dmg`
+            - **ZIP**: `Sailswift-${{ steps.version.outputs.version }}.zip`
+
             ### Installation
-            1. Download `Sailswift-${{ steps.version.outputs.version }}.zip`
-            2. Extract and drag `Sailswift.app` to your Applications folder
-            3. If you see a security warning, right-click and select "Open"
+            **DMG**: Open the disk image and drag Sailswift to your Applications folder.
+
+            **ZIP**: Extract and drag `Sailswift.app` to your Applications folder.
+
+            If you see a security warning, right-click the app and select "Open".
 
             ### Auto-Update
-            If you already have Sailswift installed, it will automatically check for updates.
+            Sailswift automatically checks for updates. You can also check manually via **Sailswift → Check for Updates...**
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
