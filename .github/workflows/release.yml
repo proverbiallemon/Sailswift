@@ -183,5 +183,21 @@ jobs:
 
             ### Auto-Update
             Sailswift automatically checks for updates. You can also check manually via **Sailswift → Check for Updates...**
+
+            ### Homebrew
+            ```
+            brew tap PocketBear/sailswift
+            brew install --cask sailswift
+            ```
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trigger Homebrew Tap Update
+        if: ${{ !contains(github.ref, 'beta') && !contains(github.ref, 'alpha') }}
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          repository: PocketBear/homebrew-sailswift
+          event-type: update-cask
+          client-payload: '{"version": "${{ steps.version.outputs.version }}"}'
+        continue-on-error: true
