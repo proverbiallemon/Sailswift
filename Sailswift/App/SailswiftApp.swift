@@ -63,6 +63,23 @@ struct SailswiftApp: App {
                     let itemType = params[1]
                     let modId = params[2]
 
+                    // Security: Validate fileId and modId are numeric
+                    guard fileId.allSatisfy({ $0.isNumber }), !fileId.isEmpty else {
+                        print("[URL Handler] Invalid fileId: not numeric")
+                        return
+                    }
+                    guard modId.allSatisfy({ $0.isNumber }), !modId.isEmpty else {
+                        print("[URL Handler] Invalid modId: not numeric")
+                        return
+                    }
+
+                    // Security: Validate itemType against allowlist
+                    let allowedItemTypes = ["Mod", "Sound", "Skin", "Tool", "Wip"]
+                    guard allowedItemTypes.contains(itemType) else {
+                        print("[URL Handler] Invalid itemType: \(itemType)")
+                        return
+                    }
+
                     print("[URL Handler] Received mod download request:")
                     print("  File ID: \(fileId)")
                     print("  Type: \(itemType)")

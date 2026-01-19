@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import CryptoKit
 
 /// Represents a download in progress
 struct Download: Identifiable {
@@ -123,6 +124,17 @@ class DownloadManager: ObservableObject {
             updateDownloadProgress(fileId: file.fileId, totalBytes: totalBytes, downloadedBytes: downloadedBytes)
             print("[DownloadManager] Downloaded \(data.count) bytes")
 
+            // Security: Verify MD5 checksum if provided
+            if !file.md5.isEmpty {
+                let computedMD5 = Insecure.MD5.hash(data: data)
+                let computedMD5String = computedMD5.map { String(format: "%02hhx", $0) }.joined()
+                if computedMD5String.lowercased() != file.md5.lowercased() {
+                    print("[DownloadManager] MD5 mismatch! Expected: \(file.md5), Got: \(computedMD5String)")
+                    throw DownloadError.checksumMismatch
+                }
+                print("[DownloadManager] MD5 verified: \(computedMD5String)")
+            }
+
             // Save to temp file
             let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
             try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
@@ -235,6 +247,9 @@ class DownloadManager: ObservableObject {
             // Use ditto for ZIP and other formats
             try await extractZip(from: archiveURL, to: extractDir)
         }
+
+        // Security: Validate no zip slip - all extracted files must be within extractDir
+        try validateExtractedFiles(in: extractDir)
 
         // Find all mod files recursively
         let modFiles = findModFiles(in: extractDir)
@@ -375,18 +390,72 @@ class DownloadManager: ObservableObject {
         return modFiles
     }
 
-    /// Sanitize folder name for filesystem
+    /// Sanitize folder name for filesystem using allowlist approach
     private func sanitizeFolderName(_ name: String) -> String {
-        var sanitized = name
-        // Remove unsafe characters
-        let unsafeChars = CharacterSet(charactersIn: "<>:\"/\\|?*")
-        sanitized = sanitized.components(separatedBy: unsafeChars).joined()
+        // Normalize unicode to prevent bypass attacks
+        let normalized = name.precomposedStringWithCanonicalMapping
+
+        // Allowlist: only keep alphanumeric, hyphen, underscore, space, and common safe chars
+        let allowedCharacters = CharacterSet.alphanumerics
+            .union(CharacterSet(charactersIn: "-_ .()[]"))
+
+        var sanitized = String(normalized.unicodeScalars.filter { allowedCharacters.contains($0) })
+
+        // Remove leading/trailing dots and spaces (prevent hidden files, trailing issues)
         sanitized = sanitized.trimmingCharacters(in: CharacterSet(charactersIn: ". "))
+
+        // Collapse multiple spaces into one
+        while sanitized.contains("  ") {
+            sanitized = sanitized.replacingOccurrences(of: "  ", with: " ")
+        }
+
         // Limit length
         if sanitized.count > 50 {
             sanitized = String(sanitized.prefix(50)).trimmingCharacters(in: .whitespaces)
         }
+
         return sanitized.isEmpty ? "mod" : sanitized
+    }
+
+    /// Security: Validate that all extracted files are within the expected directory (zip slip protection)
+    private func validateExtractedFiles(in directory: URL) throws {
+        let directoryPath = directory.standardizedFileURL.path
+
+        guard let enumerator = FileManager.default.enumerator(
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey],
+            options: []
+        ) else {
+            return
+        }
+
+        for case let fileURL as URL in enumerator {
+            // Resolve the real path to catch symlink attacks
+            let resolvedURL = fileURL.resolvingSymlinksInPath()
+            let resolvedPath = resolvedURL.standardizedFileURL.path
+
+            // Verify the file is within the extraction directory
+            if !resolvedPath.hasPrefix(directoryPath) {
+                print("[DownloadManager] Security: Zip slip detected! File escapes directory: \(resolvedPath)")
+                throw DownloadError.zipSlipDetected
+            }
+
+            // Check for symlinks pointing outside the directory
+            var isSymlink: ObjCBool = false
+            if FileManager.default.fileExists(atPath: fileURL.path, isDirectory: &isSymlink) {
+                let resourceValues = try? fileURL.resourceValues(forKeys: [.isSymbolicLinkKey])
+                if resourceValues?.isSymbolicLink == true {
+                    let linkDest = try? FileManager.default.destinationOfSymbolicLink(atPath: fileURL.path)
+                    if let dest = linkDest {
+                        let absoluteDest = directory.appendingPathComponent(dest).resolvingSymlinksInPath().path
+                        if !absoluteDest.hasPrefix(directoryPath) {
+                            print("[DownloadManager] Security: Symlink escape detected: \(fileURL.path) -> \(dest)")
+                            throw DownloadError.zipSlipDetected
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private func updateDownloadStatus(fileId: Int, status: Download.DownloadStatus, message: String? = nil) {
@@ -426,11 +495,15 @@ class DownloadManager: ObservableObject {
 enum DownloadError: LocalizedError {
     case extractionFailed
     case sevenZipNotFound
+    case checksumMismatch
+    case zipSlipDetected
 
     var errorDescription: String? {
         switch self {
         case .extractionFailed: return "Failed to extract archive"
         case .sevenZipNotFound: return "7-Zip is required to extract .7z files. Install via: brew install 7zip"
+        case .checksumMismatch: return "Download verification failed - file may be corrupted or tampered"
+        case .zipSlipDetected: return "Security error: Archive contains unsafe file paths"
         }
     }
 }
