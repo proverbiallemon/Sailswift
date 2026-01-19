@@ -53,6 +53,7 @@ class AppState: ObservableObject {
     let modManager = ModManager()
     let downloadManager = DownloadManager()
     let gameConfigService = GameConfigService()
+    let updaterService = UpdaterService.shared
 
     // MARK: - Computed Properties
 
@@ -76,6 +77,9 @@ class AppState: ObservableObject {
 
         // Ensure mods directory exists
         PathConstants.ensureDirectoriesExist()
+
+        // Sync update check preference with Sparkle
+        updaterService.automaticallyChecksForUpdates = !skipUpdateCheck
 
         // Load mod load order from config
         loadModLoadOrder()

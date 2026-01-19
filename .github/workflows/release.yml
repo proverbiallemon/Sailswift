@@ -1,0 +1,127 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      - name: Build Release
+        run: |
+          xcodebuild -project Sailswift.xcodeproj \
+            -scheme Sailswift \
+            -configuration Release \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            ONLY_ACTIVE_ARCH=NO \
+            build
+
+      - name: Create ZIP Archive
+        run: |
+          cd build/Build/Products/Release
+          zip -r -y ../../../../Sailswift-${{ steps.version.outputs.version }}.zip Sailswift.app
+
+      - name: Download Sparkle
+        run: |
+          curl -LO https://github.com/sparkle-project/Sparkle/releases/download/2.6.4/Sparkle-2.6.4.tar.xz
+          tar -xf Sparkle-2.6.4.tar.xz
+
+      - name: Sign Update with EdDSA
+        id: sign
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          # Write private key to temp file
+          echo "$SPARKLE_PRIVATE_KEY" > sparkle_private_key.pem
+
+          # Get file size
+          FILE_SIZE=$(stat -f%z "Sailswift-${{ steps.version.outputs.version }}.zip")
+
+          # Sign the update
+          SIGNATURE=$(./Sparkle-2.6.4/bin/sign_update "Sailswift-${{ steps.version.outputs.version }}.zip" -f sparkle_private_key.pem)
+
+          # Clean up private key
+          rm sparkle_private_key.pem
+
+          echo "signature=$SIGNATURE" >> $GITHUB_OUTPUT
+          echo "file_size=$FILE_SIZE" >> $GITHUB_OUTPUT
+          echo "Signature: $SIGNATURE"
+          echo "File size: $FILE_SIZE"
+
+      - name: Update Appcast
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          SIGNATURE="${{ steps.sign.outputs.signature }}"
+          FILE_SIZE="${{ steps.sign.outputs.file_size }}"
+          DATE=$(date -R)
+          DOWNLOAD_URL="https://github.com/proverbiallemon/Sailswift/releases/download/v${VERSION}/Sailswift-${VERSION}.zip"
+
+          # Create new appcast entry
+          NEW_ITEM="        <item>
+              <title>Version ${VERSION}</title>
+              <pubDate>${DATE}</pubDate>
+              <sparkle:version>${VERSION}</sparkle:version>
+              <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
+              <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+              <enclosure url=\"${DOWNLOAD_URL}\"
+                         sparkle:edSignature=\"${SIGNATURE}\"
+                         length=\"${FILE_SIZE}\"
+                         type=\"application/octet-stream\" />
+          </item>"
+
+          # Insert new item into appcast (before closing </channel>)
+          sed -i '' "s|</channel>|${NEW_ITEM}\n    </channel>|" appcast.xml
+
+          echo "Updated appcast.xml:"
+          cat appcast.xml
+
+      - name: Commit Appcast Update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add appcast.xml
+          git commit -m "Update appcast for v${{ steps.version.outputs.version }}"
+          git push origin HEAD:main
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Sailswift v${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
+          files: |
+            Sailswift-${{ steps.version.outputs.version }}.zip
+          body: |
+            ## Sailswift v${{ steps.version.outputs.version }}
+
+            ### Installation
+            1. Download `Sailswift-${{ steps.version.outputs.version }}.zip`
+            2. Extract and drag `Sailswift.app` to your Applications folder
+            3. If you see a security warning, right-click and select "Open"
+
+            ### Auto-Update
+            If you already have Sailswift installed, it will automatically check for updates.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -84,5 +84,18 @@
     <!-- Sandbox Entitlements Note: Add to entitlements file -->
     <!-- Network access for GameBanana API -->
     <!-- File access for mods directory -->
+
+    <!-- Sparkle Auto-Update Configuration -->
+    <key>SUFeedURL</key>
+    <string>https://raw.githubusercontent.com/proverbiallemon/Sailswift/main/appcast.xml</string>
+
+    <key>SUPublicEDKey</key>
+    <string>MSyVKskh3f3CYxbyU6BCQ4dkeMNGIxQHHWoKi7Criqo=</string>
+
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+
+    <key>SUScheduledCheckInterval</key>
+    <integer>86400</integer>
 </dict>
 </plist>

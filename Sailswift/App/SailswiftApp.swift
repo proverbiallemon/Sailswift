@@ -21,6 +21,11 @@ struct SailswiftApp: App {
                     appState.showAbout = true
                 }
             }
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates...") {
+                    UpdaterService.shared.checkForUpdates()
+                }
+            }
             CommandGroup(replacing: .newItem) { }
         }
 

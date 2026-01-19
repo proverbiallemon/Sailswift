@@ -53,8 +53,18 @@ struct BehaviorSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Startup") {
-                Toggle("Skip update check on startup", isOn: $appState.skipUpdateCheck)
+            Section("Updates") {
+                Toggle("Check for updates automatically", isOn: Binding(
+                    get: { !appState.skipUpdateCheck },
+                    set: { newValue in
+                        appState.skipUpdateCheck = !newValue
+                        UpdaterService.shared.automaticallyChecksForUpdates = newValue
+                    }
+                ))
+
+                Button("Check for Updates Now...") {
+                    UpdaterService.shared.checkForUpdates()
+                }
             }
 
             Section("Mods") {
