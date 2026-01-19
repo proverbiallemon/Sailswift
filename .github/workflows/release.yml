@@ -61,7 +61,10 @@ jobs:
           FILE_SIZE=$(stat -f%z "Sailswift-${{ steps.version.outputs.version }}.zip")
 
           # Sign the update (tools extract to bin/ not Sparkle-2.6.4/bin/)
-          SIGNATURE=$(./bin/sign_update "Sailswift-${{ steps.version.outputs.version }}.zip" -f sparkle_private_key.pem)
+          # sign_update outputs: sparkle:edSignature="..." length="..."
+          # Extract just the base64 signature value
+          SIGN_OUTPUT=$(./bin/sign_update "Sailswift-${{ steps.version.outputs.version }}.zip" -f sparkle_private_key.pem)
+          SIGNATURE=$(echo "$SIGN_OUTPUT" | sed -n 's/.*edSignature="\([^"]*\)".*/\1/p')
 
           # Clean up private key
           rm sparkle_private_key.pem
@@ -79,21 +82,29 @@ jobs:
           DATE=$(date -R)
           DOWNLOAD_URL="https://github.com/proverbiallemon/Sailswift/releases/download/v${VERSION}/Sailswift-${VERSION}.zip"
 
-          # Create new appcast entry
-          NEW_ITEM="        <item>
-              <title>Version ${VERSION}</title>
-              <pubDate>${DATE}</pubDate>
-              <sparkle:version>${VERSION}</sparkle:version>
-              <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
-              <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-              <enclosure url=\"${DOWNLOAD_URL}\"
-                         sparkle:edSignature=\"${SIGNATURE}\"
-                         length=\"${FILE_SIZE}\"
-                         type=\"application/octet-stream\" />
-          </item>"
-
-          # Insert new item into appcast (before closing </channel>)
-          sed -i '' "s|</channel>|${NEW_ITEM}\n    </channel>|" appcast.xml
+          # Create updated appcast with new item
+          cat > appcast.xml << EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+              <channel>
+                  <title>Sailswift Updates</title>
+                  <link>https://github.com/proverbiallemon/Sailswift</link>
+                  <description>Sailswift update feed</description>
+                  <language>en</language>
+                  <item>
+                      <title>Version ${VERSION}</title>
+                      <pubDate>${DATE}</pubDate>
+                      <sparkle:version>${VERSION}</sparkle:version>
+                      <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
+                      <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+                      <enclosure url="${DOWNLOAD_URL}"
+                                 sparkle:edSignature="${SIGNATURE}"
+                                 length="${FILE_SIZE}"
+                                 type="application/octet-stream" />
+                  </item>
+              </channel>
+          </rss>
+          EOF
 
           echo "Updated appcast.xml:"
           cat appcast.xml
