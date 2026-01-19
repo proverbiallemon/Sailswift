@@ -30,6 +30,12 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Building version: $VERSION"
 
+      - name: Set Version in Info.plist
+        run: |
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ steps.version.outputs.version }}" Sailswift/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ github.run_number }}" Sailswift/Info.plist
+          echo "Version set to: ${{ steps.version.outputs.version }} (${{ github.run_number }})"
+
       - name: Build Release
         run: |
           xcodebuild -project Sailswift.xcodeproj \
@@ -39,8 +45,6 @@ jobs:
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
             ONLY_ACTIVE_ARCH=NO \
-            MARKETING_VERSION="${{ steps.version.outputs.version }}" \
-            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
             build
 
       - name: Re-sign Frameworks and App
