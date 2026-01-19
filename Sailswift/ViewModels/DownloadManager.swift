@@ -107,19 +107,31 @@ class DownloadManager: ObservableObject {
             let totalBytes = response.expectedContentLength
             updateDownloadProgress(fileId: file.fileId, totalBytes: totalBytes, downloadedBytes: 0)
 
-            // Download with progress
+            // Download with progress using buffered chunks for performance
             var data = Data()
             data.reserveCapacity(totalBytes > 0 ? Int(totalBytes) : 1024 * 1024)
 
+            let chunkSize = 64 * 1024  // 64KB buffer
+            var buffer = [UInt8]()
+            buffer.reserveCapacity(chunkSize)
+
             var downloadedBytes: Int64 = 0
             for try await byte in bytes {
-                data.append(byte)
-                downloadedBytes += 1
+                buffer.append(byte)
 
-                // Update progress every 64KB to avoid too many UI updates
-                if downloadedBytes % (64 * 1024) == 0 {
+                // When buffer is full, append to data and update progress
+                if buffer.count >= chunkSize {
+                    data.append(contentsOf: buffer)
+                    downloadedBytes += Int64(buffer.count)
+                    buffer.removeAll(keepingCapacity: true)
                     updateDownloadProgress(fileId: file.fileId, totalBytes: totalBytes, downloadedBytes: downloadedBytes)
                 }
+            }
+
+            // Append remaining bytes in buffer
+            if !buffer.isEmpty {
+                data.append(contentsOf: buffer)
+                downloadedBytes += Int64(buffer.count)
             }
 
             // Final progress update
@@ -332,8 +344,6 @@ class DownloadManager: ObservableObject {
         process.waitUntilExit()
 
         if process.terminationStatus != 0 {
-            let errorData = pipe.fileHandleForReading.readDataToEndOfFile()
-            let errorString = String(data: errorData, encoding: .utf8) ?? "Unknown error"
             throw DownloadError.extractionFailed
         }
     }
@@ -393,8 +403,6 @@ class DownloadManager: ObservableObject {
         process.waitUntilExit()
 
         if process.terminationStatus != 0 {
-            let errorData = pipe.fileHandleForReading.readDataToEndOfFile()
-            let errorString = String(data: errorData, encoding: .utf8) ?? "Unknown error"
             throw DownloadError.extractionFailed
         }
     }
