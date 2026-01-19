@@ -40,6 +40,26 @@ struct Download: Identifiable {
     }
 }
 
+/// Helper class to handle URLSession download delegate callbacks
+private class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
+    var onProgress: ((Int64, Int64) -> Void)?
+    var onComplete: ((URL?, Error?) -> Void)?
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        onComplete?(location, nil)
+    }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        onProgress?(totalBytesWritten, totalBytesExpectedToWrite)
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if let error = error {
+            onComplete?(nil, error)
+        }
+    }
+}
+
 /// Manager for downloading mods from GameBanana
 @MainActor
 class DownloadManager: ObservableObject {
@@ -48,7 +68,6 @@ class DownloadManager: ObservableObject {
 
     private let api = GameBananaAPI.shared
     private let fileService = FileService.shared
-    private let session: URLSession
 
     /// Callback to notify AppState of download completion
     var onDownloadComplete: ((Bool, String) -> Void)?
@@ -59,11 +78,7 @@ class DownloadManager: ObservableObject {
     /// Callback when unrar is required (RAR uses unsupported compression)
     var onUnrarMissing: (() -> Void)?
 
-    init() {
-        let config = URLSessionConfiguration.default
-        config.httpAdditionalHeaders = ["User-Agent": "Sailswift/1.0"]
-        self.session = URLSession(configuration: config)
-    }
+    init() {}
 
     /// Handle a download request from the shipofharkinian:// URL scheme
     func downloadFromURLScheme(itemId: String, itemType: String, fileId: String) async {
@@ -87,7 +102,7 @@ class DownloadManager: ObservableObject {
         }
     }
 
-    /// Download a file from GameBanana
+    /// Download a file from GameBanana using fast URLSessionDownloadTask
     func downloadFile(_ file: GameBananaFile, modName: String, modId: Int? = nil) async {
         var download = Download(filename: file.filename, modName: modName, fileId: file.fileId, modId: modId)
         download.status = .downloading
@@ -96,71 +111,33 @@ class DownloadManager: ObservableObject {
         downloads.append(download)
 
         do {
+            // Use URLSessionDownloadTask for browser-equivalent download speed
+            let tempFile = try await downloadWithProgress(
+                url: file.downloadURL,
+                filename: file.filename,
+                fileId: file.fileId
+            )
 
-            // Use bytes for progress tracking
-            let (bytes, response) = try await session.bytes(from: file.downloadURL)
-
-            if let httpResponse = response as? HTTPURLResponse {
-                print("[DownloadManager] Response status: \(httpResponse.statusCode)")
-            }
-
-            let totalBytes = response.expectedContentLength
-            updateDownloadProgress(fileId: file.fileId, totalBytes: totalBytes, downloadedBytes: 0)
-
-            // Download with progress using buffered chunks for performance
-            var data = Data()
-            data.reserveCapacity(totalBytes > 0 ? Int(totalBytes) : 1024 * 1024)
-
-            let chunkSize = 64 * 1024  // 64KB buffer
-            var buffer = [UInt8]()
-            buffer.reserveCapacity(chunkSize)
-
-            var downloadedBytes: Int64 = 0
-            for try await byte in bytes {
-                buffer.append(byte)
-
-                // When buffer is full, append to data and update progress
-                if buffer.count >= chunkSize {
-                    data.append(contentsOf: buffer)
-                    downloadedBytes += Int64(buffer.count)
-                    buffer.removeAll(keepingCapacity: true)
-                    updateDownloadProgress(fileId: file.fileId, totalBytes: totalBytes, downloadedBytes: downloadedBytes)
-                }
-            }
-
-            // Append remaining bytes in buffer
-            if !buffer.isEmpty {
-                data.append(contentsOf: buffer)
-                downloadedBytes += Int64(buffer.count)
-            }
-
-            // Final progress update
-            updateDownloadProgress(fileId: file.fileId, totalBytes: totalBytes, downloadedBytes: downloadedBytes)
-            print("[DownloadManager] Downloaded \(data.count) bytes")
+            print("[DownloadManager] Downloaded to temp: \(tempFile.path)")
 
             // Security: Verify MD5 checksum if provided
             if !file.md5.isEmpty {
+                let data = try Data(contentsOf: tempFile)
                 let computedMD5 = Insecure.MD5.hash(data: data)
                 let computedMD5String = computedMD5.map { String(format: "%02hhx", $0) }.joined()
                 if computedMD5String.lowercased() != file.md5.lowercased() {
+                    try? FileManager.default.removeItem(at: tempFile)
                     throw DownloadError.checksumMismatch
                 }
             }
-
-            // Save to temp file
-            let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-            try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-            let tempFile = tempDir.appendingPathComponent(file.filename)
-            try data.write(to: tempFile)
-            print("[DownloadManager] Saved to temp: \(tempFile.path)")
 
             updateDownloadStatus(fileId: file.fileId, status: .extracting, message: "Extracting files...")
 
             // Handle the downloaded file
             let installedCount = try await handleDownloadedFile(tempFile, modName: modName, modId: modId)
 
-            // Clean up temp directory
-            try? FileManager.default.removeItem(at: tempDir)
+            // Clean up temp directory (parent of tempFile)
+            try? FileManager.default.removeItem(at: tempFile.deletingLastPathComponent())
 
             if installedCount > 0 {
                 let message = installedCount == 1
@@ -586,9 +563,71 @@ class DownloadManager: ObservableObject {
     private func showResult(success: Bool, message: String) {
         onDownloadComplete?(success, message)
     }
+
+    /// Download file using URLSessionDownloadTask for browser-equivalent speed
+    /// This method uses delegate-based downloading instead of byte-by-byte streaming
+    private func downloadWithProgress(url: URL, filename: String, fileId: Int) async throws -> URL {
+        // Create a dedicated delegate instance for this download
+        let delegate = DownloadDelegate()
+
+        // Create session with delegate
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForResource = 300 // 5 minutes
+        config.httpAdditionalHeaders = ["User-Agent": "Sailswift/1.0"]
+        let session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
+
+        // Use withCheckedThrowingContinuation to bridge delegate callbacks to async/await
+        return try await withCheckedThrowingContinuation { continuation in
+            var hasResumed = false
+
+            delegate.onProgress = { [weak self] totalBytesWritten, totalBytesExpectedToWrite in
+                Task { @MainActor in
+                    self?.updateDownloadProgress(
+                        fileId: fileId,
+                        totalBytes: totalBytesExpectedToWrite,
+                        downloadedBytes: totalBytesWritten
+                    )
+                }
+            }
+
+            delegate.onComplete = { [weak self] location, error in
+                guard !hasResumed else { return }
+                hasResumed = true
+
+                // Invalidate session to break retain cycle and release resources
+                session.finishTasksAndInvalidate()
+
+                if let error = error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+
+                guard let location = location else {
+                    continuation.resume(throwing: DownloadError.downloadFailed)
+                    return
+                }
+
+                // Move downloaded file to a stable temp location before the delegate cleans it up
+                let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("sailswift_\(UUID().uuidString)")
+                let tempFile = tempDir.appendingPathComponent(filename)
+
+                do {
+                    try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+                    try FileManager.default.moveItem(at: location, to: tempFile)
+                    continuation.resume(returning: tempFile)
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+
+            let task = session.downloadTask(with: url)
+            task.resume()
+        }
+    }
 }
 
 enum DownloadError: LocalizedError {
+    case downloadFailed
     case extractionFailed
     case sevenZipNotFound
     case rarMethodUnsupported
@@ -597,6 +636,7 @@ enum DownloadError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
+        case .downloadFailed: return "Download failed - no file received"
         case .extractionFailed: return "Failed to extract archive"
         case .sevenZipNotFound: return "7-Zip is required to extract .7z and .rar files. Install via: brew install 7zip"
         case .rarMethodUnsupported: return "This RAR file uses a compression method not supported by 7-Zip. Install unar via: brew install unar"
