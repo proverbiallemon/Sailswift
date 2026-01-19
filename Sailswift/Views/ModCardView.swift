@@ -10,16 +10,7 @@ struct ModCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            AsyncImage(url: mod.imageURL) { phase in
-                switch phase {
-                case .empty: Rectangle().fill(Color.gray.opacity(0.2)).overlay { ProgressView() }
-                case .success(let image): image.resizable().aspectRatio(contentMode: .fill)
-                case .failure: Rectangle().fill(Color.gray.opacity(0.2)).overlay { Image(systemName: "photo").foregroundColor(.secondary) }
-                @unknown default: Rectangle().fill(Color.gray.opacity(0.2))
-                }
-            }
-            .frame(height: 150)
-            .clipped()
+            ModThumbnailView(imageURL: mod.imageURL, itemType: mod.itemType, size: .large)
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(mod.name).font(.headline).lineLimit(2).frame(height: 44, alignment: .topLeading)

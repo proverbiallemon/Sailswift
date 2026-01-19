@@ -573,6 +573,7 @@ class DownloadManager: ObservableObject {
         // Create session with delegate
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForResource = 300 // 5 minutes
+        config.httpAdditionalHeaders = ["User-Agent": "Sailswift/1.0"]
         let session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
 
         // Use withCheckedThrowingContinuation to bridge delegate callbacks to async/await
@@ -593,13 +594,16 @@ class DownloadManager: ObservableObject {
                 guard !hasResumed else { return }
                 hasResumed = true
 
+                // Invalidate session to break retain cycle and release resources
+                session.finishTasksAndInvalidate()
+
                 if let error = error {
                     continuation.resume(throwing: error)
                     return
                 }
 
                 guard let location = location else {
-                    continuation.resume(throwing: DownloadError.extractionFailed)
+                    continuation.resume(throwing: DownloadError.downloadFailed)
                     return
                 }
 
@@ -623,6 +627,7 @@ class DownloadManager: ObservableObject {
 }
 
 enum DownloadError: LocalizedError {
+    case downloadFailed
     case extractionFailed
     case sevenZipNotFound
     case rarMethodUnsupported
@@ -631,6 +636,7 @@ enum DownloadError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
+        case .downloadFailed: return "Download failed - no file received"
         case .extractionFailed: return "Failed to extract archive"
         case .sevenZipNotFound: return "7-Zip is required to extract .7z and .rar files. Install via: brew install 7zip"
         case .rarMethodUnsupported: return "This RAR file uses a compression method not supported by 7-Zip. Install unar via: brew install unar"
