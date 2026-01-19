@@ -243,8 +243,6 @@ class DownloadManager: ObservableObject {
         // Detect archive type and extract accordingly
         let lowercasedFilename = archiveURL.lastPathComponent.lowercased()
 
-        let needs7z = lowercasedFilename.hasSuffix(".7z") || lowercasedFilename.hasSuffix(".rar")
-
         if lowercasedFilename.hasSuffix(".7z") {
             // Use 7-Zip for .7z files
             try await extract7z(from: archiveURL, to: extractDir)
@@ -363,12 +361,12 @@ class DownloadManager: ObservableObject {
             let errorData = pipe.fileHandleForReading.readDataToEndOfFile()
             let errorString = String(data: errorData, encoding: .utf8) ?? ""
 
-            // If unsupported method, try unrar
-            if errorString.contains("Unsupported Method") {
-            } else {
-                // Other error, don't fall back
+            // Only fall through to unar if it's an unsupported compression method
+            // For other errors (corrupt file, etc.), throw immediately
+            if !errorString.contains("Unsupported Method") {
                 throw DownloadError.extractionFailed
             }
+            // Fall through to unar fallback below
         }
 
         // Try unar as fallback (or primary if 7-Zip not available)

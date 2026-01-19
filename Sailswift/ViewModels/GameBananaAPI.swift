@@ -66,6 +66,14 @@ class GameBananaAPI {
     private let userAgent = "Sailswift/1.0 (Ship of Harkinian Mod Manager)"
     private let session: URLSession
 
+    /// Valid GameBanana item types for URL path sanitization
+    private let validItemTypes: Set<String> = ["Mod", "Sound", "Skin", "Texture", "Model", "Map", "Tool", "Spray", "Gui", "Wip"]
+
+    /// Sanitize item type to prevent URL injection
+    private func sanitizeItemType(_ itemType: String) -> String {
+        return validItemTypes.contains(itemType) ? itemType : "Mod"
+    }
+
     private init() {
         let config = URLSessionConfiguration.default
         config.httpAdditionalHeaders = ["User-Agent": userAgent]
@@ -171,9 +179,11 @@ class GameBananaAPI {
 
     /// Fetch downloadable files for a mod/sound/skin/etc.
     func fetchModFiles(modId: Int, itemType: String = "Mod") async throws -> [GameBananaFile] {
+        let safeItemType = sanitizeItemType(itemType)
+
         // For Mod type, use the /Files endpoint
         // For other types (Sound, Skin, etc.), fetch item with _aFiles property
-        if itemType == "Mod" {
+        if safeItemType == "Mod" {
             let url = URL(string: "\(baseURL)/Mod/\(modId)/Files")!
             let (data, _) = try await session.data(from: url)
 
@@ -184,7 +194,7 @@ class GameBananaAPI {
             return parseFileArray(files)
         } else {
             // For non-Mod types, fetch the item with _aFiles included
-            var components = URLComponents(string: "\(baseURL)/\(itemType)/\(modId)")!
+            var components = URLComponents(string: "\(baseURL)/\(safeItemType)/\(modId)")!
             components.queryItems = [
                 URLQueryItem(name: "_csvProperties", value: "_aFiles")
             ]
@@ -223,7 +233,8 @@ class GameBananaAPI {
 
     /// Fetch mod details by ID
     func fetchModDetails(modId: Int, itemType: String = "Mod") async throws -> GameBananaMod? {
-        var components = URLComponents(string: "\(baseURL)/\(itemType)/\(modId)")!
+        let safeItemType = sanitizeItemType(itemType)
+        var components = URLComponents(string: "\(baseURL)/\(safeItemType)/\(modId)")!
         components.queryItems = [
             URLQueryItem(name: "_csvProperties", value: "_idRow,_sName,_aSubmitter,_aPreviewMedia,_aRootCategory,_nViewCount,_nLikeCount,_sProfileUrl,_tsDateAdded,_tsDateUpdated")
         ]
