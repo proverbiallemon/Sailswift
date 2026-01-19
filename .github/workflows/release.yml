@@ -99,12 +99,15 @@ jobs:
       - name: Update Appcast
         run: |
           VERSION="${{ steps.version.outputs.version }}"
+          BUILD_NUMBER="${{ github.run_number }}"
           SIGNATURE="${{ steps.sign.outputs.signature }}"
           FILE_SIZE="${{ steps.sign.outputs.file_size }}"
           DATE=$(date -R)
           DOWNLOAD_URL="https://github.com/proverbiallemon/Sailswift/releases/download/v${VERSION}/Sailswift-${VERSION}.zip"
 
           # Create updated appcast with new item
+          # sparkle:version uses build number for reliable comparison
+          # sparkle:shortVersionString is the display version
           cat > appcast.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
@@ -116,7 +119,7 @@ jobs:
                   <item>
                       <title>Version ${VERSION}</title>
                       <pubDate>${DATE}</pubDate>
-                      <sparkle:version>${VERSION}</sparkle:version>
+                      <sparkle:version>${BUILD_NUMBER}</sparkle:version>
                       <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
                       <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
                       <enclosure url="${DOWNLOAD_URL}"
