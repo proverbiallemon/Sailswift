@@ -186,7 +186,7 @@ jobs:
 
             ### Homebrew
             ```
-            brew tap PocketBear/sailswift
+            brew tap PocketBearDev/sailswift
             brew install --cask sailswift
             ```
         env:
@@ -197,7 +197,7 @@ jobs:
         uses: peter-evans/repository-dispatch@v2
         with:
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          repository: PocketBear/homebrew-sailswift
+          repository: PocketBearDev/homebrew-sailswift
           event-type: update-cask
           client-payload: '{"version": "${{ steps.version.outputs.version }}"}'
         continue-on-error: true
