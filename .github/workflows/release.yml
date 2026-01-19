@@ -39,6 +39,8 @@ jobs:
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
             ONLY_ACTIVE_ARCH=NO \
+            MARKETING_VERSION="${{ steps.version.outputs.version }}" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
             build
 
       - name: Re-sign Frameworks and App
