@@ -8,25 +8,101 @@ struct ModListView: View {
 
     @State private var modTree: [ModTreeNode] = []
     @State private var expandedFolders: Set<String> = []
+    @State private var loadOrderExpanded: Bool = false
 
     var body: some View {
-        List(selection: $selectedNode) {
-            Section {
-                ForEach(filteredModTree) { node in
-                    ModTreeNodeView(node: node, expandedFolders: $expandedFolders, onToggle: { toggleNode($0) })
-                }
-            } header: {
-                HStack {
-                    Image(systemName: rootFolderIcon).foregroundColor(rootFolderColor)
-                    Text("mods").fontWeight(.semibold)
-                    Spacer()
-                    Text("\(appState.mods.count)").foregroundColor(.secondary).font(.caption)
+        VStack(spacing: 0) {
+            // Main mods tree list
+            List(selection: $selectedNode) {
+                Section {
+                    ForEach(filteredModTree) { node in
+                        ModTreeNodeView(
+                            node: node,
+                            expandedFolders: $expandedFolders,
+                            onToggle: { toggleNode($0) },
+                            loadOrderIndexProvider: { appState.loadOrderIndex(for: $0) }
+                        )
+                    }
+                } header: {
+                    HStack {
+                        Image(systemName: rootFolderIcon).foregroundColor(rootFolderColor)
+                        Text("mods").fontWeight(.semibold)
+                        Spacer()
+                        Text("\(appState.mods.count)").foregroundColor(.secondary).font(.caption)
+                    }
                 }
             }
+            .listStyle(.sidebar)
+
+            // Load Order section (separate list for drag-drop support)
+            if !appState.modLoadOrder.isEmpty {
+                Divider()
+                loadOrderSection
+            }
         }
-        .listStyle(.sidebar)
         .task { await buildModTree() }
         .onChange(of: appState.mods) { _ in Task { await buildModTree() } }
+    }
+
+    @ViewBuilder
+    private var loadOrderSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header (clickable to expand/collapse)
+            Button {
+                withAnimation { loadOrderExpanded.toggle() }
+            } label: {
+                HStack {
+                    Image(systemName: loadOrderExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .frame(width: 12)
+                    Image(systemName: "arrow.up.arrow.down.circle.fill")
+                        .foregroundColor(.blue)
+                    Text("Load Order").fontWeight(.semibold)
+                    Spacer()
+                    Text("\(appState.modLoadOrder.count)")
+                        .foregroundColor(.secondary)
+                        .font(.caption)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if loadOrderExpanded {
+                // Reorderable list with onMove
+                List {
+                    ForEach(appState.modLoadOrder, id: \.self) { modName in
+                        LoadOrderRowView(
+                            modName: modName,
+                            index: appState.modLoadOrder.firstIndex(of: modName) ?? 0,
+                            totalCount: appState.modLoadOrder.count,
+                            onToggle: {
+                                if let mod = appState.mods.first(where: { $0.name == modName }) {
+                                    Task { await appState.toggleMod(mod) }
+                                }
+                            },
+                            onMoveUp: { appState.moveModUp(modName) },
+                            onMoveDown: { appState.moveModDown(modName) }
+                        )
+                    }
+                    .onMove { indices, newOffset in
+                        appState.modLoadOrder.move(fromOffsets: indices, toOffset: newOffset)
+                        appState.syncLoadOrderToConfig()
+                    }
+                }
+                .listStyle(.inset)
+                .frame(maxHeight: 200)
+
+                Text("Higher position = Higher priority (loads last)")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
+            }
+        }
+        .background(Color(NSColor.controlBackgroundColor))
     }
 
     private var filteredModTree: [ModTreeNode] {
@@ -96,11 +172,16 @@ struct ModTreeNodeView: View {
     let node: ModTreeNode
     @Binding var expandedFolders: Set<String>
     let onToggle: (ModTreeNode) -> Void
+    var loadOrderIndexProvider: ((String) -> Int?)? = nil
 
     var body: some View {
         switch node {
         case .mod(let mod):
-            ModRowView(mod: mod, onToggle: { onToggle(node) }).tag(node)
+            ModRowView(
+                mod: mod,
+                onToggle: { onToggle(node) },
+                loadOrderIndex: mod.isEnabled ? loadOrderIndexProvider?(mod.name) : nil
+            ).tag(node)
         case .folder(let folder, let children):
             DisclosureGroup(
                 isExpanded: Binding(
@@ -109,7 +190,7 @@ struct ModTreeNodeView: View {
                 )
             ) {
                 ForEach(children) { child in
-                    ModTreeNodeView(node: child, expandedFolders: $expandedFolders, onToggle: onToggle)
+                    ModTreeNodeView(node: child, expandedFolders: $expandedFolders, onToggle: onToggle, loadOrderIndexProvider: loadOrderIndexProvider)
                 }
             } label: {
                 FolderRowView(folder: folder, onToggle: { onToggle(node) })

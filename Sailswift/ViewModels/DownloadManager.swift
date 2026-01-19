@@ -7,11 +7,35 @@ struct Download: Identifiable {
     let filename: String
     let modName: String
     let fileId: Int
+    let modId: Int?
     var progress: Double = 0
+    var totalBytes: Int64 = 0
+    var downloadedBytes: Int64 = 0
     var status: DownloadStatus = .pending
+    var statusMessage: String = "Preparing..."
 
     enum DownloadStatus {
         case pending, downloading, extracting, completed, failed
+    }
+
+    var progressText: String {
+        switch status {
+        case .pending:
+            return "Waiting..."
+        case .downloading:
+            if totalBytes > 0 {
+                let downloaded = ByteCountFormatter.string(fromByteCount: downloadedBytes, countStyle: .file)
+                let total = ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file)
+                return "\(downloaded) / \(total)"
+            }
+            return "Downloading..."
+        case .extracting:
+            return "Extracting..."
+        case .completed:
+            return "Complete"
+        case .failed:
+            return statusMessage
+        }
     }
 }
 
@@ -27,6 +51,9 @@ class DownloadManager: ObservableObject {
 
     /// Callback to notify AppState of download completion
     var onDownloadComplete: ((Bool, String) -> Void)?
+
+    /// Callback when 7-Zip is required but not installed
+    var on7zMissing: (() -> Void)?
 
     init() {
         let config = URLSessionConfiguration.default
@@ -57,19 +84,43 @@ class DownloadManager: ObservableObject {
     }
 
     /// Download a file from GameBanana
-    func downloadFile(_ file: GameBananaFile, modName: String) async {
-        var download = Download(filename: file.filename, modName: modName, fileId: file.fileId)
+    func downloadFile(_ file: GameBananaFile, modName: String, modId: Int? = nil) async {
+        var download = Download(filename: file.filename, modName: modName, fileId: file.fileId, modId: modId)
         download.status = .downloading
+        download.statusMessage = "Starting download..."
         currentDownload = download
         downloads.append(download)
 
         do {
             print("[DownloadManager] Starting download: \(file.downloadURL)")
-            let (data, response) = try await session.data(from: file.downloadURL)
+
+            // Use bytes for progress tracking
+            let (bytes, response) = try await session.bytes(from: file.downloadURL)
 
             if let httpResponse = response as? HTTPURLResponse {
                 print("[DownloadManager] Response status: \(httpResponse.statusCode)")
             }
+
+            let totalBytes = response.expectedContentLength
+            updateDownloadProgress(fileId: file.fileId, totalBytes: totalBytes, downloadedBytes: 0)
+
+            // Download with progress
+            var data = Data()
+            data.reserveCapacity(totalBytes > 0 ? Int(totalBytes) : 1024 * 1024)
+
+            var downloadedBytes: Int64 = 0
+            for try await byte in bytes {
+                data.append(byte)
+                downloadedBytes += 1
+
+                // Update progress every 64KB to avoid too many UI updates
+                if downloadedBytes % (64 * 1024) == 0 {
+                    updateDownloadProgress(fileId: file.fileId, totalBytes: totalBytes, downloadedBytes: downloadedBytes)
+                }
+            }
+
+            // Final progress update
+            updateDownloadProgress(fileId: file.fileId, totalBytes: totalBytes, downloadedBytes: downloadedBytes)
             print("[DownloadManager] Downloaded \(data.count) bytes")
 
             // Save to temp file
@@ -79,35 +130,40 @@ class DownloadManager: ObservableObject {
             try data.write(to: tempFile)
             print("[DownloadManager] Saved to temp: \(tempFile.path)")
 
-            updateDownloadStatus(fileId: file.fileId, status: .extracting)
+            updateDownloadStatus(fileId: file.fileId, status: .extracting, message: "Extracting files...")
 
             // Handle the downloaded file
-            let installedCount = try await handleDownloadedFile(tempFile, modName: modName)
+            let installedCount = try await handleDownloadedFile(tempFile, modName: modName, modId: modId)
 
             // Clean up temp directory
             try? FileManager.default.removeItem(at: tempDir)
-
-            updateDownloadStatus(fileId: file.fileId, status: .completed)
 
             if installedCount > 0 {
                 let message = installedCount == 1
                     ? "Installed to \(sanitizeFolderName(modName))/"
                     : "Installed \(installedCount) files to \(sanitizeFolderName(modName))/"
+                updateDownloadStatus(fileId: file.fileId, status: .completed, message: message)
                 showResult(success: true, message: message)
             } else {
+                updateDownloadStatus(fileId: file.fileId, status: .failed, message: "No mod files found")
                 showResult(success: false, message: "No mod files found in archive")
             }
 
+        } catch DownloadError.sevenZipNotFound {
+            print("[DownloadManager] 7-Zip not found")
+            updateDownloadStatus(fileId: file.fileId, status: .failed, message: "7-Zip required")
+            on7zMissing?()
         } catch {
             print("[DownloadManager] Error: \(error)")
-            updateDownloadStatus(fileId: file.fileId, status: .failed)
+            updateDownloadStatus(fileId: file.fileId, status: .failed, message: error.localizedDescription)
             showResult(success: false, message: "Download failed: \(error.localizedDescription)")
         }
 
-        currentDownload = nil
+        // Don't clear currentDownload here - keep it to show completion status
+        // The user will dismiss the popover which clears it via AppState.cancelImport()
     }
 
-    private func handleDownloadedFile(_ tempURL: URL, modName: String) async throws -> Int {
+    private func handleDownloadedFile(_ tempURL: URL, modName: String, modId: Int?) async throws -> Int {
         let lowercasedFilename = tempURL.lastPathComponent.lowercased()
         let folderName = sanitizeFolderName(modName)
         let modFolder = PathConstants.modsDirectory.appendingPathComponent(folderName)
@@ -121,16 +177,42 @@ class DownloadManager: ObservableObject {
             }
             try FileManager.default.moveItem(at: tempURL, to: destFile)
             print("[DownloadManager] Installed mod file to: \(destFile.path)")
+
+            // Save metadata
+            saveMetadata(modName: modName, modId: modId, to: modFolder)
+
             return 1
         }
 
         // If it's an archive, extract and find mod files
         if lowercasedFilename.hasSuffix(".zip") || lowercasedFilename.hasSuffix(".7z") {
-            return try await extractAndInstallMods(from: tempURL, to: modFolder)
+            let count = try await extractAndInstallMods(from: tempURL, to: modFolder)
+            if count > 0 {
+                saveMetadata(modName: modName, modId: modId, to: modFolder)
+            }
+            return count
         }
 
         // Unknown file type - try to treat as archive
-        return try await extractAndInstallMods(from: tempURL, to: modFolder)
+        let count = try await extractAndInstallMods(from: tempURL, to: modFolder)
+        if count > 0 {
+            saveMetadata(modName: modName, modId: modId, to: modFolder)
+        }
+        return count
+    }
+
+    private func saveMetadata(modName: String, modId: Int?, to folder: URL) {
+        let metadata = ModMetadata(
+            gameBananaName: modName,
+            gameBananaModId: modId,
+            downloadedAt: Date()
+        )
+        do {
+            try metadata.save(to: folder)
+            print("[DownloadManager] Saved metadata to: \(folder.path)")
+        } catch {
+            print("[DownloadManager] Failed to save metadata: \(error)")
+        }
     }
 
     private func extractAndInstallMods(from archiveURL: URL, to modFolder: URL) async throws -> Int {
@@ -142,23 +224,16 @@ class DownloadManager: ObservableObject {
             try? FileManager.default.removeItem(at: extractDir)
         }
 
-        // Extract archive using ditto
+        // Detect archive type and extract accordingly
+        let lowercasedFilename = archiveURL.lastPathComponent.lowercased()
         print("[DownloadManager] Extracting to: \(extractDir.path)")
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
-        process.arguments = ["-xk", archiveURL.path, extractDir.path]
 
-        let pipe = Pipe()
-        process.standardError = pipe
-
-        try process.run()
-        process.waitUntilExit()
-
-        if process.terminationStatus != 0 {
-            let errorData = pipe.fileHandleForReading.readDataToEndOfFile()
-            let errorString = String(data: errorData, encoding: .utf8) ?? "Unknown error"
-            print("[DownloadManager] ditto error: \(errorString)")
-            throw DownloadError.extractionFailed
+        if lowercasedFilename.hasSuffix(".7z") {
+            // Use 7-Zip for .7z files
+            try await extract7z(from: archiveURL, to: extractDir)
+        } else {
+            // Use ditto for ZIP and other formats
+            try await extractZip(from: archiveURL, to: extractDir)
         }
 
         // Find all mod files recursively
@@ -194,6 +269,88 @@ class DownloadManager: ObservableObject {
         }
 
         return installedCount
+    }
+
+    /// Extract a ZIP archive using ditto
+    private func extractZip(from archiveURL: URL, to extractDir: URL) async throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+        process.arguments = ["-xk", archiveURL.path, extractDir.path]
+
+        let pipe = Pipe()
+        process.standardError = pipe
+
+        try process.run()
+        process.waitUntilExit()
+
+        if process.terminationStatus != 0 {
+            let errorData = pipe.fileHandleForReading.readDataToEndOfFile()
+            let errorString = String(data: errorData, encoding: .utf8) ?? "Unknown error"
+            print("[DownloadManager] ditto error: \(errorString)")
+            throw DownloadError.extractionFailed
+        }
+    }
+
+    /// Extract a 7z archive using 7-Zip
+    private func extract7z(from archiveURL: URL, to extractDir: URL) async throws {
+        guard let sevenZipPath = find7zBinary() else {
+            print("[DownloadManager] 7-Zip not found")
+            throw DownloadError.sevenZipNotFound
+        }
+
+        print("[DownloadManager] Using 7-Zip at: \(sevenZipPath)")
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: sevenZipPath)
+        // x = extract with full paths, -o = output directory, -y = yes to all prompts
+        process.arguments = ["x", archiveURL.path, "-o\(extractDir.path)", "-y"]
+
+        let pipe = Pipe()
+        process.standardError = pipe
+        process.standardOutput = pipe
+
+        try process.run()
+        process.waitUntilExit()
+
+        if process.terminationStatus != 0 {
+            let errorData = pipe.fileHandleForReading.readDataToEndOfFile()
+            let errorString = String(data: errorData, encoding: .utf8) ?? "Unknown error"
+            print("[DownloadManager] 7z error: \(errorString)")
+            throw DownloadError.extractionFailed
+        }
+    }
+
+    /// Find 7-Zip binary - checks bundled, then common Homebrew paths
+    private func find7zBinary() -> String? {
+        // Check if bundled with app
+        if let bundledPath = Bundle.main.path(forResource: "7zz", ofType: nil) {
+            if FileManager.default.isExecutableFile(atPath: bundledPath) {
+                return bundledPath
+            }
+        }
+
+        // Check common Homebrew/MacPorts paths
+        let possiblePaths = [
+            "/opt/homebrew/bin/7z",          // Homebrew on Apple Silicon
+            "/opt/homebrew/bin/7zz",         // 7-Zip official binary
+            "/usr/local/bin/7z",             // Homebrew on Intel
+            "/usr/local/bin/7zz",            // 7-Zip official binary
+            "/opt/local/bin/7z",             // MacPorts
+            "/opt/local/bin/7zz"             // MacPorts
+        ]
+
+        for path in possiblePaths {
+            if FileManager.default.isExecutableFile(atPath: path) {
+                return path
+            }
+        }
+
+        return nil
+    }
+
+    /// Check if 7-Zip is available on the system
+    func is7zAvailable() -> Bool {
+        return find7zBinary() != nil
     }
 
     /// Find all mod files (.otr, .o2r) recursively in a directory
@@ -232,12 +389,32 @@ class DownloadManager: ObservableObject {
         return sanitized.isEmpty ? "mod" : sanitized
     }
 
-    private func updateDownloadStatus(fileId: Int, status: Download.DownloadStatus) {
+    private func updateDownloadStatus(fileId: Int, status: Download.DownloadStatus, message: String? = nil) {
         if let index = downloads.firstIndex(where: { $0.fileId == fileId }) {
             downloads[index].status = status
+            if let message = message {
+                downloads[index].statusMessage = message
+            }
         }
         if currentDownload?.fileId == fileId {
             currentDownload?.status = status
+            if let message = message {
+                currentDownload?.statusMessage = message
+            }
+        }
+    }
+
+    private func updateDownloadProgress(fileId: Int, totalBytes: Int64, downloadedBytes: Int64) {
+        let progress = totalBytes > 0 ? Double(downloadedBytes) / Double(totalBytes) : 0
+        if let index = downloads.firstIndex(where: { $0.fileId == fileId }) {
+            downloads[index].progress = progress
+            downloads[index].totalBytes = totalBytes
+            downloads[index].downloadedBytes = downloadedBytes
+        }
+        if currentDownload?.fileId == fileId {
+            currentDownload?.progress = progress
+            currentDownload?.totalBytes = totalBytes
+            currentDownload?.downloadedBytes = downloadedBytes
         }
     }
 
@@ -248,10 +425,12 @@ class DownloadManager: ObservableObject {
 
 enum DownloadError: LocalizedError {
     case extractionFailed
+    case sevenZipNotFound
 
     var errorDescription: String? {
         switch self {
         case .extractionFailed: return "Failed to extract archive"
+        case .sevenZipNotFound: return "7-Zip is required to extract .7z files. Install via: brew install 7zip"
         }
     }
 }

@@ -10,14 +10,7 @@ class GameConfigService {
 
     /// Enable AltAssets in the configuration
     func enableAltAssets() throws {
-        var config: GameConfig
-
-        if FileManager.default.fileExists(atPath: configURL.path) {
-            let data = try Data(contentsOf: configURL)
-            config = try JSONDecoder().decode(GameConfig.self, from: data)
-        } else {
-            config = GameConfig(cvars: CVars(gSettings: GSettings(altAssets: 1)))
-        }
+        var config = try loadConfig()
 
         if config.cvars == nil {
             config.cvars = CVars(gSettings: GSettings(altAssets: 1))
@@ -27,6 +20,45 @@ class GameConfigService {
             config.cvars?.gSettings?.altAssets = 1
         }
 
+        try saveConfig(config)
+    }
+
+    /// Get the mod load order from the configuration
+    /// Returns an array of mod names in load order (earlier = lower priority)
+    func getModLoadOrder() throws -> [String] {
+        let config = try loadConfig()
+        guard let enabledMods = config.cvars?.gSettings?.enabledMods, !enabledMods.isEmpty else {
+            return []
+        }
+        return enabledMods.components(separatedBy: "|")
+    }
+
+    /// Set the mod load order in the configuration
+    /// - Parameter order: Array of mod names in load order (earlier = lower priority)
+    func setModLoadOrder(_ order: [String]) throws {
+        var config = try loadConfig()
+
+        if config.cvars == nil {
+            config.cvars = CVars(gSettings: GSettings())
+        } else if config.cvars?.gSettings == nil {
+            config.cvars?.gSettings = GSettings()
+        }
+
+        config.cvars?.gSettings?.enabledMods = order.joined(separator: "|")
+        try saveConfig(config)
+    }
+
+    // MARK: - Private Helpers
+
+    private func loadConfig() throws -> GameConfig {
+        if FileManager.default.fileExists(atPath: configURL.path) {
+            let data = try Data(contentsOf: configURL)
+            return try JSONDecoder().decode(GameConfig.self, from: data)
+        }
+        return GameConfig(cvars: CVars(gSettings: GSettings()))
+    }
+
+    private func saveConfig(_ config: GameConfig) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(config)
@@ -47,7 +79,9 @@ struct CVars: Codable {
 
 struct GSettings: Codable {
     var altAssets: Int?
+    var enabledMods: String?
     enum CodingKeys: String, CodingKey {
         case altAssets = "AltAssets"
+        case enabledMods = "EnabledMods"
     }
 }

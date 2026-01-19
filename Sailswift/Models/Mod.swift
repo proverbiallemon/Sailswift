@@ -1,5 +1,30 @@
 import Foundation
 
+/// Metadata saved alongside mod files for GameBanana lookup
+struct ModMetadata: Codable {
+    let gameBananaName: String
+    let gameBananaModId: Int?
+    let downloadedAt: Date
+
+    static let filename = ".sailswift.json"
+
+    static func load(from folder: URL) -> ModMetadata? {
+        let metaFile = folder.appendingPathComponent(filename)
+        guard let data = try? Data(contentsOf: metaFile) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try? decoder.decode(ModMetadata.self, from: data)
+    }
+
+    func save(to folder: URL) throws {
+        let metaFile = folder.appendingPathComponent(Self.filename)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(self)
+        try data.write(to: metaFile)
+    }
+}
+
 /// Represents a mod file in the mods directory
 struct Mod: Identifiable, Hashable {
     let id: String
@@ -51,6 +76,27 @@ struct Mod: Identifiable, Hashable {
             newExtension = "o2r"
         }
         return path.deletingPathExtension().appendingPathExtension(newExtension)
+    }
+
+    /// Get the name to use for GameBanana search
+    /// Checks for metadata file first, then falls back to folder name, then file name
+    func searchableName(modsDirectory: URL) -> String {
+        // If mod is in a folder, check for metadata
+        if !folderPath.isEmpty {
+            let topLevelFolder = folderPath.components(separatedBy: "/").first ?? folderPath
+            let folderURL = modsDirectory.appendingPathComponent(topLevelFolder)
+
+            // Check for metadata file
+            if let metadata = ModMetadata.load(from: folderURL) {
+                return metadata.gameBananaName
+            }
+
+            // Fall back to folder name
+            return topLevelFolder
+        }
+
+        // Mod is at root level - use file name
+        return name
     }
 }
 

@@ -6,12 +6,42 @@ class ModManager: ObservableObject {
     private let fileService = FileService.shared
 
     /// Load all mods from the mods directory
-    func loadMods(from directory: URL) async throws -> [Mod] {
+    /// - Parameters:
+    ///   - directory: The mods directory to load from
+    ///   - loadOrder: Optional array of mod names defining load priority (earlier = lower priority)
+    func loadMods(from directory: URL, loadOrder: [String] = []) async throws -> [Mod] {
         let modFiles = try fileService.listModFiles(in: directory)
-        return modFiles.map { url in
+        let allMods = modFiles.map { url in
             let relativePath = fileService.relativePath(of: url, from: directory)
             return Mod(path: url, relativePath: relativePath)
-        }.sorted { $0.relativePath < $1.relativePath }
+        }
+
+        // Separate enabled and disabled mods
+        let enabledMods = allMods.filter { $0.isEnabled }
+        let disabledMods = allMods.filter { !$0.isEnabled }
+
+        // Sort enabled mods by load order (mods not in order go to end, alphabetically)
+        let sortedEnabledMods = enabledMods.sorted { mod1, mod2 in
+            let index1 = loadOrder.firstIndex(of: mod1.name)
+            let index2 = loadOrder.firstIndex(of: mod2.name)
+
+            switch (index1, index2) {
+            case let (i1?, i2?):
+                return i1 < i2
+            case (nil, _?):
+                return false // mod1 not in order, goes after mod2
+            case (_?, nil):
+                return true  // mod1 in order, goes before mod2
+            case (nil, nil):
+                return mod1.name.localizedCaseInsensitiveCompare(mod2.name) == .orderedAscending
+            }
+        }
+
+        // Sort disabled mods alphabetically
+        let sortedDisabledMods = disabledMods.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+
+        // Combine: enabled mods first (in load order), then disabled mods (alphabetically)
+        return sortedEnabledMods + sortedDisabledMods
     }
 
     /// Build a tree structure of mods and folders

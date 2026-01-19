@@ -11,6 +11,7 @@ Native macOS mod manager for **Ship of Harkinian** - built with Swift and SwiftU
 ### Core Functionality
 - **Mod Management** - View, enable, disable, and delete mods with a native interface
 - **Folder Hierarchy** - Navigate mods organized in folders with collapsible tree view
+- **Load Order Management** - Drag-and-drop reordering synced with Ship of Harkinian's config
 - **One-Click Launch** - Start the game with proper AltAssets configuration
 - **Mod Profiles** - Save and load different mod configurations (data models implemented)
 - **Custom URL Scheme** - One-click mod installation from GameBanana using `shipofharkinian://` links
@@ -18,10 +19,12 @@ Native macOS mod manager for **Ship of Harkinian** - built with Swift and SwiftU
 ### GameBanana Integration
 - Browse mods directly from the app with pre-loaded mod cache
 - Instant local fuzzy filtering by name and author
-- Download with progress tracking
-- Automatic ZIP extraction using native tools
+- Download with real-time progress tracking (bytes downloaded/total)
+- Automatic ZIP and 7z archive extraction
 - One-click install from GameBanana website via custom URL scheme
-- Import confirmation dialog showing mod details before download
+- Import confirmation popover showing mod details before download
+- Multiple simultaneous downloads with stacked progress display
+- Mod metadata preservation for accurate GameBanana search lookups
 
 ### Native Mac Experience
 - **Instant Startup** - No interpreter overhead
@@ -34,6 +37,11 @@ Native macOS mod manager for **Ship of Harkinian** - built with Swift and SwiftU
 
 - macOS 13.0 (Ventura) or later
 - [Ship of Harkinian](https://www.shipofharkinian.com/) installed
+- **Optional**: [7-Zip](https://www.7-zip.org/) for extracting `.7z` archives
+  ```bash
+  brew install 7zip
+  ```
+  > **Note**: Sailswift will automatically prompt you to install 7-Zip via Homebrew if you try to download a mod packaged as a `.7z` archive. ZIP files work without any additional software.
 
 ## Installation
 
@@ -55,6 +63,13 @@ Download the latest release from the [Releases](https://github.com/proverbiallem
 - Enable/disable mods by clicking on them in the mod list
 - Folder controls allow toggling all mods within a folder
 - Delete mods using the context menu or keyboard shortcuts
+
+### Load Order Management
+The Load Order section at the bottom of the mod list shows all enabled mods in their current priority order:
+- **Drag-and-drop** or use the **up/down buttons** to reorder mods
+- Higher position = higher priority (loads last, overrides earlier mods)
+- Changes are automatically synced to Ship of Harkinian's config (`EnabledMods` in `shipofharkinian.json`)
+- Expand/collapse the section by clicking the header
 
 ### Launching the Game
 1. Set your Ship of Harkinian installation path in Settings
@@ -78,9 +93,11 @@ Sailswift registers the `shipofharkinian://` URL scheme for seamless mod install
 
 When you click a `shipofharkinian://` link:
 1. Sailswift will automatically open (or bring to front if already running)
-2. An import confirmation dialog shows mod details (thumbnail, name, author, file info)
-3. Click "Install" to download - ZIP files are automatically extracted to the mods directory
-4. You'll receive a notification when installation completes
+2. An import confirmation popover shows mod details (thumbnail, name, author, file info)
+3. Click "Install" to download - a progress bar shows download and extraction status
+4. Multiple downloads can run simultaneously and stack in the popover
+5. Click the download icon in the toolbar to show/hide the download popover
+6. ZIP files extract automatically; `.7z` files require 7-Zip (Sailswift will prompt to install if missing)
 
 ### Mod Profiles
 Save and restore mod configurations for different playthroughs. Profile data models are implemented and can be managed programmatically through the `ModProfileManager` class.
@@ -93,13 +110,13 @@ Sailswift/
 │   ├── SailswiftApp.swift      # Entry point + URL scheme handler
 │   └── AppState.swift          # Global state management
 ├── Models/
-│   ├── Mod.swift               # Mod data model
+│   ├── Mod.swift               # Mod data model + ModMetadata
 │   ├── ModProfile.swift        # Profile data + manager
 │   └── GameBananaMod.swift     # API response models
 ├── Views/
 │   ├── MainView.swift          # Main window
-│   ├── ModListView.swift       # Mod tree/list
-│   ├── ModRowView.swift        # Individual mod row
+│   ├── ModListView.swift       # Mod tree/list + Load Order section
+│   ├── ModRowView.swift        # Mod row + LoadOrderRowView
 │   ├── ModBrowserView.swift    # GameBanana browser
 │   ├── ModCardView.swift       # Mod card in browser
 │   ├── SettingsView.swift      # Preferences window
@@ -119,11 +136,13 @@ Sailswift/
 ### Key Implementation Notes
 - **App Sandbox**: Disabled (`com.apple.security.app-sandbox = false`) to allow full access to `~/Library/Application Support/com.shipofharkinian.soh/mods/`
 - **Single Window**: Uses SwiftUI `Window` (not `WindowGroup`) + `LSMultipleInstancesProhibited` for proper single-instance behavior
-- **Archive Extraction**: Uses native `/usr/bin/ditto` command for ZIP extraction
+- **Archive Extraction**: Uses `/usr/bin/ditto` for ZIP, 7-Zip for `.7z` files (auto-detected from Homebrew)
 - **URL Scheme**: Registered in `Info.plist` and handled in `SailswiftApp.swift` with import confirmation
 - **Mod Cache**: `GameBananaModCache` singleton pre-loads all mods for instant local fuzzy filtering
 - **Async/Await**: All I/O operations use modern Swift concurrency
 - **No External Dependencies**: Pure Swift/SwiftUI implementation
+- **Load Order Sync**: `GameConfigService` reads/writes `EnabledMods` pipe-separated list in SoH config
+- **Mod Metadata**: Downloads save `.sailswift.json` with GameBanana mod name for accurate lookups
 
 ## Technology Stack
 
@@ -132,9 +151,9 @@ Sailswift/
 | UI Framework | SwiftUI |
 | Networking | URLSession + async/await |
 | Data Persistence | UserDefaults + JSON (profiles.json) |
-| Archive Extraction | `/usr/bin/ditto` (native macOS tool) |
+| Archive Extraction | `/usr/bin/ditto` (ZIP), 7-Zip (`.7z`) |
 | File Management | FileManager + FileService wrapper |
-| Configuration | GameConfigService (shipofharkinian.json) |
+| Configuration | GameConfigService (shipofharkinian.json, EnabledMods) |
 | API Integration | GameBanana API v11 |
 
 ## Development Status
@@ -142,14 +161,18 @@ Sailswift/
 ### Implemented Features ✅
 - Core mod management (enable/disable/delete)
 - Hierarchical folder tree view with state tracking
+- Load order management with drag-and-drop reordering
 - GameBanana API integration (browse, filter, download)
 - GameBanana mod cache with local fuzzy filtering
 - Custom URL scheme handler (`shipofharkinian://`) with import confirmation
 - Single-window behavior (URL scheme uses existing window)
 - Game launcher with AltAssets auto-configuration
 - Mod profile data models and persistence
-- ZIP archive extraction
+- ZIP and 7z archive extraction with progress tracking
+- Popover-based download UI with stacked progress display
+- 7-Zip installation prompt via Homebrew when needed
 - Settings management with auto-detection
+- Mod metadata preservation (`.sailswift.json`) for GameBanana lookups
 
 ### Not Yet Implemented
 - Modpack export/import UI
@@ -157,7 +180,6 @@ Sailswift/
 - Quick Look preview integration
 - Update checking service
 - Mod profile UI (data layer exists)
-- 7z archive support (only ZIP currently)
 - MD5 verification during downloads
 
 ## Technical Details
@@ -166,6 +188,7 @@ Sailswift/
 - **Mods Directory**: `~/Library/Application Support/com.shipofharkinian.soh/mods/`
 - **Game Config**: `~/Library/Application Support/com.shipofharkinian.soh/shipofharkinian.json`
 - **Profiles**: `~/Library/Application Support/Sailswift/profiles.json`
+- **Mod Metadata**: `.sailswift.json` inside each mod folder (stores GameBanana mod name)
 
 ### Mod File Extensions
 - `.otr` - Enabled OTR mod (OoT Redux)
@@ -191,6 +214,38 @@ shipofharkinian://https//gamebanana.com/mmdl/{fileId},{itemType},{modId}
 Example: shipofharkinian://https//gamebanana.com/mmdl/1513584,Mod,578470
          fileId=1513584, itemType=Mod, modId=578470
 ```
+
+### Load Order System
+Sailswift syncs with Ship of Harkinian's native mod load order stored in `shipofharkinian.json`:
+
+```json
+{
+  "CVars": {
+    "gSettings": {
+      "EnabledMods": "ModA|ModB|ModC"
+    }
+  }
+}
+```
+
+- Mods are stored as a pipe-separated list in `EnabledMods`
+- Order determines load priority: later mods override earlier ones
+- When you reorder mods in Sailswift, the config file is updated immediately
+- Enabling a mod adds it to the end of the list (highest priority)
+- Disabling a mod removes it from the list
+
+### Mod Metadata System
+When downloading mods from GameBanana, Sailswift saves a `.sailswift.json` file in each mod folder:
+
+```json
+{
+  "gameBananaName": "Actual Mod Name",
+  "gameBananaModId": 578470,
+  "downloadedAt": "2026-01-19T12:00:00Z"
+}
+```
+
+This preserves the original mod name for accurate GameBanana searches, since folder names may differ from the actual mod name on GameBanana.
 
 ### App Sandbox Consideration
 This app disables the App Sandbox to access the Ship of Harkinian mods directory directly. While this reduces security isolation, it's necessary for seamless mod management without requiring user file selection for every operation. This is why Sailswift is distributed directly rather than through the Mac App Store.

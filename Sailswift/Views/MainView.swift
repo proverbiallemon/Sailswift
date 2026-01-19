@@ -13,6 +13,11 @@ struct MainView: View {
     @State private var detailMode: DetailViewMode = .mods
     @State private var searchText = ""
 
+    /// Whether there are any active or pending downloads
+    private var hasActiveDownloads: Bool {
+        !appState.downloadManager.downloads.isEmpty || appState.pendingImport != nil
+    }
+
     var body: some View {
         NavigationSplitView {
             ModListView(selectedNode: $selectedNode, searchText: $searchText)
@@ -27,6 +32,16 @@ struct MainView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
+                // Downloads button - anchor for popover, toggles visibility
+                Button(action: { appState.toggleDownloadPopover() }) {
+                    Label("Downloads", systemImage: downloadButtonIcon)
+                }
+                .popover(isPresented: $appState.showDownloadPopover, arrowEdge: .bottom) {
+                    ImportPopoverView(downloadManager: appState.downloadManager)
+                        .environmentObject(appState)
+                }
+                .opacity(hasActiveDownloads ? 1 : 0.5)
+
                 Button(action: { Task { await appState.launchGame() } }) {
                     Label("Launch Game", systemImage: "play.fill")
                 }
@@ -83,9 +98,36 @@ struct MainView: View {
         } message: {
             Text(appState.downloadAlertMessage)
         }
-        .sheet(isPresented: $appState.showImportConfirmation) {
-            ImportConfirmationView()
+        .alert("7-Zip Required", isPresented: $appState.show7zMissingAlert) {
+            Button("Install via Homebrew") {
+                appState.install7zipViaHomebrew()
+            }
+            Button("Copy Command") {
+                appState.copy7zipCommand()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This mod is packaged as a .7z archive which requires 7-Zip to extract.\n\nInstall it with Homebrew or copy the command to run manually.")
         }
+    }
+
+    /// Icon for the downloads button based on current state
+    private var downloadButtonIcon: String {
+        let downloads = appState.downloadManager.downloads
+        // Check if any download is in progress
+        if downloads.contains(where: { $0.status == .downloading }) {
+            return "arrow.down.circle.fill"
+        }
+        if downloads.contains(where: { $0.status == .extracting }) {
+            return "archivebox.fill"
+        }
+        if downloads.contains(where: { $0.status == .failed }) {
+            return "xmark.circle.fill"
+        }
+        if !downloads.isEmpty || appState.pendingImport != nil {
+            return "arrow.down.circle.fill"
+        }
+        return "arrow.down.circle"
     }
 
     private func toggleSelected() {
@@ -141,6 +183,11 @@ struct ModInfoSplitView: View {
     /// Get fresh mod data from AppState (in case it was toggled)
     private var currentMod: Mod {
         appState.mods.first { $0.name == mod.name && $0.folderPath == mod.folderPath } ?? mod
+    }
+
+    /// Name to use for GameBanana search - checks metadata, then folder name, then file name
+    private var searchableName: String {
+        mod.searchableName(modsDirectory: appState.modsDirectory)
     }
 
     private var filteredMods: [GameBananaMod] {
@@ -285,15 +332,15 @@ struct ModInfoSplitView: View {
             }
             .task {
                 await cache.loadAllIfNeeded()
-                // Pre-fill filter with mod name on first appearance
+                // Pre-fill filter with searchable name on first appearance
                 if !hasInitializedFilter {
-                    filterText = mod.name
+                    filterText = searchableName
                     hasInitializedFilter = true
                 }
             }
             .onChange(of: mod.id) { _ in
                 // Update filter when selecting a different mod
-                filterText = mod.name
+                filterText = searchableName
             }
         }
     }
@@ -305,9 +352,6 @@ struct GameBananaResultRow: View {
     var onOpenInApp: ((URL) -> Void)?
     @EnvironmentObject var appState: AppState
     @State private var isHovering = false
-    @State private var showFiles = false
-    @State private var files: [GameBananaFile] = []
-    @State private var isLoadingFiles = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -348,7 +392,7 @@ struct GameBananaResultRow: View {
                 .buttonStyle(.bordered)
                 .help("View on GameBanana")
 
-                Button(action: { showFiles = true }) {
+                Button(action: { Task { await appState.handleBrowseImport(mod: mod) } }) {
                     Image(systemName: "arrow.down.circle")
                 }
                 .buttonStyle(.borderedProminent)
@@ -359,22 +403,6 @@ struct GameBananaResultRow: View {
         .background(isHovering ? Color.accentColor.opacity(0.1) : Color(.controlBackgroundColor))
         .cornerRadius(8)
         .onHover { isHovering = $0 }
-        .sheet(isPresented: $showFiles) {
-            FileSelectionSheet(mod: mod, files: files, isLoading: isLoadingFiles, onAppear: loadFiles) { file in
-                showFiles = false
-                Task { await appState.downloadManager.downloadFile(file, modName: mod.name) }
-            }
-        }
-    }
-
-    private func loadFiles() {
-        guard files.isEmpty else { return }
-        isLoadingFiles = true
-        Task {
-            do { files = try await GameBananaAPI.shared.fetchModFiles(modId: mod.modId) }
-            catch { print("Error loading files: \(error)") }
-            isLoadingFiles = false
-        }
     }
 }
 
@@ -518,194 +546,347 @@ struct EmptyStateView: View {
     }
 }
 
-/// Confirmation sheet for importing mods from URL scheme
-struct ImportConfirmationView: View {
+/// Popover for importing mods - click outside to dismiss
+struct ImportPopoverView: View {
     @EnvironmentObject var appState: AppState
+    @ObservedObject var downloadManager: DownloadManager
 
     var body: some View {
         VStack(spacing: 0) {
             // Header
             HStack {
-                Image(systemName: "arrow.down.circle.fill")
-                    .font(.title)
-                    .foregroundColor(.accentColor)
-                Text("Install Mod")
-                    .font(.title2)
-                    .fontWeight(.semibold)
+                Text("Downloads")
+                    .font(.headline)
                 Spacer()
+                if !downloadManager.downloads.isEmpty {
+                    Button(action: { appState.closeDownloadPopover() }) {
+                        Text("Clear All")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.secondary)
+                }
             }
             .padding()
             .background(.bar)
 
             Divider()
 
-            if let pending = appState.pendingImport {
-                if pending.isLoading {
-                    VStack(spacing: 16) {
-                        ProgressView()
-                        Text("Fetching mod information...")
-                            .foregroundColor(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if let error = pending.error {
-                    VStack(spacing: 16) {
-                        Image(systemName: "exclamationmark.triangle")
-                            .font(.system(size: 48))
-                            .foregroundColor(.orange)
-                        Text("Error")
-                            .font(.headline)
-                        Text(error)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding()
-                } else if let file = pending.file {
-                    // Mod and file details
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 16) {
-                            // Mod info header (if available)
-                            if let mod = pending.mod {
-                                HStack(alignment: .top, spacing: 16) {
-                                    // Thumbnail
-                                    AsyncImage(url: mod.imageURL) { phase in
-                                        switch phase {
-                                        case .success(let image):
-                                            image.resizable().aspectRatio(contentMode: .fill)
-                                        default:
-                                            Rectangle().fill(Color.gray.opacity(0.2))
-                                        }
-                                    }
-                                    .frame(width: 120, height: 90)
-                                    .cornerRadius(8)
-                                    .clipped()
-
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        Text(mod.name)
-                                            .font(.title3)
-                                            .fontWeight(.semibold)
-                                        Label(mod.author, systemImage: "person")
-                                            .foregroundColor(.secondary)
-                                        Label(mod.category, systemImage: "folder")
-                                            .foregroundColor(.secondary)
-                                        HStack(spacing: 16) {
-                                            Label(mod.formattedLikeCount, systemImage: "heart")
-                                            Label(mod.formattedViewCount, systemImage: "eye")
-                                        }
-                                        .foregroundColor(.secondary)
-                                        .font(.caption)
-                                    }
-                                }
-                            } else {
-                                // Fallback header when mod info not available
-                                HStack(alignment: .top, spacing: 16) {
-                                    Image(systemName: "doc.zipper")
-                                        .font(.system(size: 48))
-                                        .foregroundColor(.accentColor)
-                                        .frame(width: 80, height: 80)
-                                        .background(Color(.controlBackgroundColor))
-                                        .cornerRadius(12)
-
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        Text((file.filename as NSString).deletingPathExtension)
-                                            .font(.title3)
-                                            .fontWeight(.semibold)
-                                        Text("From GameBanana")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                            }
-
+            ScrollView {
+                VStack(spacing: 12) {
+                    // Show pending import first
+                    if let pending = appState.pendingImport {
+                        importConfirmationView(pending: pending)
+                        if !downloadManager.downloads.isEmpty {
                             Divider()
+                        }
+                    }
 
-                            // File details
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("File to Download")
-                                    .font(.headline)
-                                HStack {
-                                    Image(systemName: "doc.zipper")
-                                        .foregroundColor(.secondary)
-                                    Text(file.filename)
-                                    Spacer()
-                                    Text(file.formattedFilesize)
-                                        .foregroundColor(.secondary)
-                                }
-                                .padding(12)
-                                .background(Color(.controlBackgroundColor))
-                                .cornerRadius(8)
+                    // Show all downloads
+                    ForEach(downloadManager.downloads) { download in
+                        DownloadProgressRow(download: download, onClear: {
+                            appState.clearDownload(download)
+                        })
+                    }
 
-                                HStack(spacing: 16) {
-                                    if file.downloadCount > 0 {
-                                        Label("\(file.downloadCount) downloads", systemImage: "arrow.down.circle")
-                                    }
-                                    if !file.analysisResult.isEmpty {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: file.analysisResult == "ok" ? "checkmark.shield.fill" : "exclamationmark.shield")
-                                                .foregroundColor(file.analysisResult == "ok" ? .green : .orange)
-                                            Text(file.analysisResult == "ok" ? "Clean" : file.analysisResult)
-                                        }
-                                    }
-                                }
+                    // Empty state
+                    if downloadManager.downloads.isEmpty && appState.pendingImport == nil {
+                        VStack(spacing: 8) {
+                            Image(systemName: "arrow.down.circle")
+                                .font(.title)
+                                .foregroundColor(.secondary)
+                            Text("No downloads")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
-                            }
-
-                            Divider()
-
-                            // Install location
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Install Location")
-                                    .font(.headline)
-                                HStack {
-                                    Image(systemName: "folder")
-                                        .foregroundColor(.secondary)
-                                    Text(PathConstants.modsDirectory.path)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                        .lineLimit(1)
-                                        .truncationMode(.middle)
-                                }
-                            }
                         }
                         .padding()
                     }
-                } else {
-                    EmptyStateView(title: "No File Info", systemImage: "questionmark.circle", description: "Could not retrieve file information")
+                }
+                .padding()
+            }
+            .frame(maxHeight: 400)
+        }
+        .frame(width: 400)
+    }
+
+    // MARK: - Import Confirmation View
+
+    @ViewBuilder
+    private func importConfirmationView(pending: PendingImport) -> some View {
+        VStack(spacing: 0) {
+            if pending.isLoading {
+                HStack(spacing: 12) {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text("Fetching mod info...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                }
+                .padding()
+                .background(Color(.controlBackgroundColor))
+                .cornerRadius(8)
+            } else if let error = pending.error {
+                HStack(spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundColor(.orange)
+                    Text(error)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Button("Dismiss") {
+                        appState.cancelImport()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+                .padding()
+                .background(Color(.controlBackgroundColor))
+                .cornerRadius(8)
+            } else if let file = pending.file {
+                VStack(spacing: 0) {
+                    // Mod info header
+                    HStack(alignment: .top, spacing: 12) {
+                        if let mod = pending.mod {
+                            AsyncImage(url: mod.imageURL) { phase in
+                                switch phase {
+                                case .success(let image):
+                                    image.resizable().aspectRatio(contentMode: .fill)
+                                default:
+                                    Rectangle().fill(Color.gray.opacity(0.2))
+                                }
+                            }
+                            .frame(width: 60, height: 45)
+                            .cornerRadius(4)
+                            .clipped()
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(mod.name)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .lineLimit(1)
+                                Text(mod.author)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        } else {
+                            Image(systemName: "doc.zipper")
+                                .font(.title2)
+                                .foregroundColor(.accentColor)
+                            Text((file.filename as NSString).deletingPathExtension)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .lineLimit(1)
+                        }
+                        Spacer()
+                    }
+
+                    // File selection (if multiple files)
+                    if pending.files.count > 1 {
+                        Divider().padding(.vertical, 8)
+                        VStack(spacing: 6) {
+                            ForEach(pending.files) { f in
+                                CompactFileRow(
+                                    file: f,
+                                    isSelected: f.fileId == file.fileId,
+                                    onSelect: { appState.selectImportFile(f) }
+                                )
+                            }
+                        }
+                    }
+
+                    Divider().padding(.vertical, 8)
+
+                    // Selected file info + Install button
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(file.filename)
+                                .font(.caption)
+                                .lineLimit(1)
+                            Text(file.formattedFilesize)
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+
+                        Spacer()
+
+                        Button(action: {
+                            Task { await appState.confirmImport() }
+                        }) {
+                            Label("Install", systemImage: "arrow.down.circle")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                    }
+                }
+                .padding()
+                .background(Color(.controlBackgroundColor))
+                .cornerRadius(8)
+            }
+        }
+    }
+}
+
+/// Row showing download progress
+struct DownloadProgressRow: View {
+    let download: Download
+    let onClear: () -> Void
+
+    var body: some View {
+        VStack(spacing: 8) {
+            // Header with name and status icon
+            HStack {
+                Image(systemName: statusIcon)
+                    .foregroundColor(statusColor)
+                Text(download.modName)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .lineLimit(1)
+                Spacer()
+                if download.status == .completed || download.status == .failed {
+                    Button(action: onClear) {
+                        Image(systemName: "xmark")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.secondary)
                 }
             }
 
-            Divider()
+            // Progress bar (only show if downloading or extracting)
+            if download.status == .downloading || download.status == .extracting {
+                VStack(alignment: .leading, spacing: 4) {
+                    ProgressView(value: download.progress)
+                        .progressViewStyle(.linear)
 
-            // Buttons
-            HStack {
-                Button("Cancel") {
-                    appState.cancelImport()
+                    HStack {
+                        Text(download.progressText)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text("\(Int(download.progress * 100))%")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
                 }
-                .keyboardShortcut(.cancelAction)
+            }
+
+            // Status message for completed/failed
+            if download.status == .completed || download.status == .failed {
+                HStack {
+                    Text(download.statusMessage)
+                        .font(.caption)
+                        .foregroundColor(download.status == .completed ? .green : .red)
+                    Spacer()
+                }
+            }
+        }
+        .padding()
+        .background(Color(.controlBackgroundColor))
+        .cornerRadius(8)
+    }
+
+    private var statusIcon: String {
+        switch download.status {
+        case .pending: return "clock"
+        case .downloading: return "arrow.down.circle.fill"
+        case .extracting: return "archivebox.fill"
+        case .completed: return "checkmark.circle.fill"
+        case .failed: return "xmark.circle.fill"
+        }
+    }
+
+    private var statusColor: Color {
+        switch download.status {
+        case .pending: return .secondary
+        case .downloading: return .blue
+        case .extracting: return .orange
+        case .completed: return .green
+        case .failed: return .red
+        }
+    }
+}
+
+/// Compact file selection row for popover
+struct CompactFileRow: View {
+    let file: GameBananaFile
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 8) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundColor(isSelected ? .accentColor : .secondary)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(file.filename)
+                        .font(.caption)
+                        .lineLimit(1)
+                    Text(file.formattedFilesize)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
 
                 Spacer()
 
-                if let pending = appState.pendingImport {
-                    Button(action: {
-                        if let url = URL(string: "https://gamebanana.com/mods/\(pending.modId)") {
-                            NSWorkspace.shared.open(url)
-                        }
-                    }) {
-                        Label("View on GameBanana", systemImage: "globe")
+                if !file.analysisResult.isEmpty {
+                    Image(systemName: file.analysisResult == "ok" ? "checkmark.shield.fill" : "exclamationmark.shield")
+                        .foregroundColor(file.analysisResult == "ok" ? .green : .orange)
+                        .font(.caption)
+                }
+            }
+            .padding(8)
+            .background(isSelected ? Color.accentColor.opacity(0.1) : Color(.controlBackgroundColor))
+            .cornerRadius(6)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Row for selecting a file in the import confirmation
+struct FileSelectionRow: View {
+    let file: GameBananaFile
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 12) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundColor(isSelected ? .accentColor : .secondary)
+                    .font(.title3)
+
+                Image(systemName: "doc.zipper")
+                    .foregroundColor(.secondary)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(file.filename)
+                        .lineLimit(1)
+                    HStack(spacing: 8) {
+                        Text(file.formattedFilesize)
+                        Text("•")
+                        Text("\(file.downloadCount) downloads")
                     }
-                    .buttonStyle(.bordered)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
                 }
 
-                Button("Install") {
-                    Task { await appState.confirmImport() }
+                Spacer()
+
+                if !file.analysisResult.isEmpty {
+                    Image(systemName: file.analysisResult == "ok" ? "checkmark.shield.fill" : "exclamationmark.shield")
+                        .foregroundColor(file.analysisResult == "ok" ? .green : .orange)
                 }
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.defaultAction)
-                .disabled(appState.pendingImport?.file == nil)
             }
-            .padding()
+            .padding(10)
+            .background(isSelected ? Color.accentColor.opacity(0.1) : Color(.controlBackgroundColor))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
+            )
         }
-        .frame(width: 500, height: 450)
+        .buttonStyle(.plain)
     }
 }

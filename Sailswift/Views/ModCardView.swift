@@ -7,9 +7,6 @@ struct ModCardView: View {
 
     @EnvironmentObject var appState: AppState
     @State private var isHovering = false
-    @State private var showFiles = false
-    @State private var files: [GameBananaFile] = []
-    @State private var isLoadingFiles = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -46,7 +43,7 @@ struct ModCardView: View {
                 Divider()
 
                 HStack(spacing: 8) {
-                    Button(action: { showFiles = true }) {
+                    Button(action: { Task { await appState.handleBrowseImport(mod: mod) } }) {
                         Label("Download", systemImage: "arrow.down.circle").frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
@@ -68,83 +65,18 @@ struct ModCardView: View {
         }
         .background(Color(.windowBackgroundColor))
         .cornerRadius(12)
+        .contentShape(Rectangle())
+        .onTapGesture { Task { await appState.handleBrowseImport(mod: mod) } }
         .shadow(color: .black.opacity(isHovering ? 0.2 : 0.1), radius: isHovering ? 8 : 4)
         .scaleEffect(isHovering ? 1.02 : 1.0)
         .animation(.easeInOut(duration: 0.2), value: isHovering)
-        .onHover { isHovering = $0 }
-        .sheet(isPresented: $showFiles) {
-            FileSelectionSheet(mod: mod, files: files, isLoading: isLoadingFiles, onAppear: loadFiles) { file in
-                showFiles = false
-                Task { await appState.downloadManager.downloadFile(file, modName: mod.name) }
-            }
-        }
-    }
-
-    private func loadFiles() {
-        guard files.isEmpty else { return }
-        isLoadingFiles = true
-        Task {
-            do { files = try await GameBananaAPI.shared.fetchModFiles(modId: mod.modId) }
-            catch { print("Error loading files: \(error)") }
-            isLoadingFiles = false
-        }
-    }
-}
-
-struct FileSelectionSheet: View {
-    let mod: GameBananaMod
-    let files: [GameBananaFile]
-    let isLoading: Bool
-    let onAppear: () -> Void
-    let onDownload: (GameBananaFile) -> Void
-
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                VStack(alignment: .leading) {
-                    Text("Download \(mod.name)").font(.headline)
-                    Text("Select a file").font(.subheadline).foregroundColor(.secondary)
-                }
-                Spacer()
-                Button(action: { dismiss() }) {
-                    Image(systemName: "xmark.circle.fill").font(.title2).foregroundColor(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding()
-
-            Divider()
-
-            if isLoading {
-                VStack { ProgressView(); Text("Loading...").foregroundColor(.secondary) }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if files.isEmpty {
-                EmptyStateView(title: "No Files", systemImage: "doc.questionmark", description: "No downloadable files")
+        .onHover { hovering in
+            isHovering = hovering
+            if hovering {
+                NSCursor.pointingHand.push()
             } else {
-                List(files) { file in
-                    HStack(spacing: 12) {
-                        Image(systemName: "doc.zipper").font(.title2).foregroundColor(.accentColor).frame(width: 32)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(file.filename).font(.headline).lineLimit(1)
-                            HStack(spacing: 12) {
-                                Text(file.formattedFilesize)
-                                Text("\(file.downloadCount) downloads")
-                            }
-                            .font(.caption).foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        Button(action: { onDownload(file) }) {
-                            Label("Download", systemImage: "arrow.down.circle")
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
-                    .padding(.vertical, 4)
-                }
+                NSCursor.pop()
             }
         }
-        .frame(width: 500, height: 400)
-        .onAppear(perform: onAppear)
     }
 }
