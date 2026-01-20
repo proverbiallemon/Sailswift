@@ -1,5 +1,9 @@
 # Sailswift
 
+<p align="center">
+  <img src="docs/icon.png" alt="Sailswift Icon" width="128" height="128">
+</p>
+
 Native macOS mod manager for **Ship of Harkinian** - built with Swift and SwiftUI.
 
 > **Built on the logic of [Saildeck-macOS](https://github.com/proverbiallemon/Saildeck-macOS)** (itself a fork of the original [Saildeck](https://github.com/Wolfeni/Saildeck) by Wolfeni) - rewritten from Python/tkinter to native Swift for optimal Mac performance.
