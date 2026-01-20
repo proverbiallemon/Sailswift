@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1000000000000070 /* gamebanana-icon.png in Resources */ = {isa = PBXBuildFile; fileRef = 2000000000000070 /* gamebanana-icon.png */; };
 		1000000000000001 /* SailswiftApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000001 /* SailswiftApp.swift */; };
 		1000000000000002 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000002 /* AppState.swift */; };
 		1000000000000010 /* Mod.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000010 /* Mod.swift */; };
@@ -56,6 +57,7 @@
 		2000000000000051 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
 		2000000000000060 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2000000000000061 /* Sailswift.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Sailswift.entitlements; sourceTree = "<group>"; };
+		2000000000000070 /* gamebanana-icon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "gamebanana-icon.png"; sourceTree = "<group>"; };
 		3000000000000000 /* Sailswift.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Sailswift.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6CDA87B42F1E24FE00739D35 /* UpdaterService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdaterService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -89,6 +91,7 @@
 				5000000000000040 /* ViewModels */,
 				5000000000000050 /* Services */,
 				5000000000000060 /* Utilities */,
+				5000000000000070 /* Resources */,
 				2000000000000060 /* Info.plist */,
 				2000000000000061 /* Sailswift.entitlements */,
 			);
@@ -157,6 +160,14 @@
 				2000000000000051 /* Extensions.swift */,
 			);
 			path = Utilities;
+			sourceTree = "<group>";
+		};
+		5000000000000070 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				2000000000000070 /* gamebanana-icon.png */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 		5000000000000099 /* Products */ = {
@@ -228,6 +239,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1000000000000070 /* gamebanana-icon.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
