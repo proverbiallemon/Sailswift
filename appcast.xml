@@ -6,14 +6,14 @@
         <description>Sailswift update feed</description>
         <language>en</language>
         <item>
-            <title>Version 1.0.4</title>
-            <pubDate>Tue, 20 Jan 2026 01:17:59 +0000</pubDate>
-            <sparkle:version>19</sparkle:version>
-            <sparkle:shortVersionString>1.0.4</sparkle:shortVersionString>
+            <title>Version 1.0.5</title>
+            <pubDate>Tue, 20 Jan 2026 01:27:49 +0000</pubDate>
+            <sparkle:version>20</sparkle:version>
+            <sparkle:shortVersionString>1.0.5</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/proverbiallemon/Sailswift/releases/download/v1.0.4/Sailswift-1.0.4.zip"
-                       sparkle:edSignature="wxw60jyNI0/8Vv9zna30GpElNOnnobPeMZ7bpLoNOm1ZM9Gi1FTAdduyVd0qFHhgQ0P+8kNOx5j1qXuIkzX6Bw=="
-                       length="1955889"
+            <enclosure url="https://github.com/proverbiallemon/Sailswift/releases/download/v1.0.5/Sailswift-1.0.5.zip"
+                       sparkle:edSignature="Oi83DSbjl7ElAt8rueuWh3uhQsxxkzZnGWijJuV9DgW6UNCVbwL7d2CnePLoptjo4Wj5lnJneb73ferYlsjaDQ=="
+                       length="2006270"
                        type="application/octet-stream" />
         </item>
     </channel>
