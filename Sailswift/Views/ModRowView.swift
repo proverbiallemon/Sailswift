@@ -1,4 +1,5 @@
 import SwiftUI
+import Pow
 
 /// View for a single mod row in the tree
 struct ModRowView: View {
@@ -101,11 +102,30 @@ struct LoadOrderRowView: View {
 
 /// View for a folder row in the tree
 struct FolderRowView: View {
+    @EnvironmentObject var appState: AppState
     let folder: ModFolder
     let onToggle: () -> Void
+    var hasUpdate: Bool = false
+
+    @State private var shineToggle = false
+
+    private var isSelected: Bool {
+        appState.isFolderSelected(folder.relativePath)
+    }
+
+    private var isPendingDeletion: Bool {
+        appState.pendingDeletion?.folderPaths.contains(folder.relativePath) ?? false
+    }
 
     var body: some View {
         HStack(spacing: 8) {
+            // Selection checkbox (visible when there are selections or pending deletion)
+            if !appState.selectedFolders.isEmpty || appState.pendingDeletion != nil {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundColor(isSelected ? .blue : .secondary.opacity(0.5))
+                    .font(.system(size: 12))
+            }
+
             // Clickable toggle button
             Button(action: onToggle) {
                 Image(systemName: folder.state.iconName)
@@ -115,19 +135,66 @@ struct FolderRowView: View {
             .buttonStyle(.plain)
             .help("Toggle all mods in folder")
 
-            Image(systemName: "folder.fill")
-                .foregroundColor(.blue)
-                .font(.system(size: 12))
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: "folder.fill")
+                    .foregroundColor(isPendingDeletion ? .gray : .blue)
+                    .font(.system(size: 12))
+
+                // Update available badge
+                if hasUpdate && !isPendingDeletion {
+                    Circle()
+                        .fill(.orange)
+                        .frame(width: 8, height: 8)
+                        .offset(x: 3, y: -2)
+                }
+            }
 
             Text(folder.name)
                 .lineLimit(1)
                 .truncationMode(.middle)
+                .foregroundColor(isPendingDeletion ? .secondary : .primary)
+
+            // Update indicator text with shine effect
+            if hasUpdate && !isPendingDeletion {
+                Text("Update")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill(.orange))
+                    .changeEffect(.shine, value: shineToggle)
+                    .onAppear {
+                        // Start repeating shine animation
+                        startShineTimer()
+                    }
+            }
 
             Spacer()
+        }
+        .opacity(isPendingDeletion ? 0.5 : 1.0)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            // Normal click - handled by List selection
+        }
+        .simultaneousGesture(
+            TapGesture().modifiers(.command).onEnded {
+                // Command+click - toggle selection
+                appState.toggleFolderSelection(folder.relativePath)
+            }
+        )
+    }
+
+    private func startShineTimer() {
+        // Shine every 3 seconds
+        Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
+            Task { @MainActor in
+                shineToggle.toggle()
+            }
         }
     }
 
     private func colorForState(_ state: ModFolderState) -> Color {
+        if isPendingDeletion { return .gray }
         switch state {
         case .allEnabled: return .green
         case .allDisabled: return .red

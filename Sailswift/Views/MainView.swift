@@ -12,10 +12,12 @@ struct MainView: View {
     @State private var showDeleteConfirmation = false
     @State private var detailMode: DetailViewMode = .mods
     @State private var searchText = ""
+    @State private var showModpackExport = false
+    @State private var showModpackImport = false
 
-    /// Whether there are any active or pending downloads
+    /// Whether there are any active or pending Browse mode downloads
     private var hasActiveDownloads: Bool {
-        !appState.downloadManager.downloads.isEmpty || appState.pendingImport != nil
+        appState.downloadManager.downloads.contains(where: { !$0.isProfileDownload }) || appState.pendingImport != nil
     }
 
     var body: some View {
@@ -79,6 +81,26 @@ struct MainView: View {
                 Button(action: { Task { await appState.loadMods() } }) {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
+
+                Divider()
+
+                Button(action: { Task { await appState.checkForModUpdates() } }) {
+                    Label(
+                        appState.modUpdateChecker.isChecking ? "Checking..." : "Check for Mod Updates",
+                        systemImage: modUpdateIcon
+                    )
+                }
+                .disabled(appState.modUpdateChecker.isChecking)
+
+                Divider()
+
+                Button(action: { showModpackExport = true }) {
+                    Label("Export Modpack", systemImage: "square.and.arrow.up")
+                }
+
+                Button(action: { showModpackImport = true }) {
+                    Label("Import Modpack", systemImage: "square.and.arrow.down")
+                }
             }
         }
         .searchable(text: $searchText, prompt: "Search mods")
@@ -114,6 +136,26 @@ struct MainView: View {
         } message: {
             Text("This RAR file uses a compression method not supported by 7-Zip.\n\nRun in Terminal: brew install unar")
         }
+        .sheet(isPresented: $showModpackExport) {
+            ModpackExportView()
+                .environmentObject(appState)
+        }
+        .fileImporter(
+            isPresented: $showModpackImport,
+            allowedContentTypes: [.modpack, .json],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                if let url = urls.first {
+                    Task {
+                        await appState.importModpack(from: url)
+                    }
+                }
+            case .failure(let error):
+                appState.statusMessage = "Import failed: \(error.localizedDescription)"
+            }
+        }
     }
 
     /// Icon for the downloads button based on current state
@@ -133,6 +175,17 @@ struct MainView: View {
             return "arrow.down.circle.fill"
         }
         return "arrow.down.circle"
+    }
+
+    /// Icon for the mod update checker button
+    private var modUpdateIcon: String {
+        if appState.modUpdateChecker.isChecking {
+            return "arrow.triangle.2.circlepath"
+        }
+        if appState.modUpdatesAvailable > 0 {
+            return "arrow.up.circle.fill"
+        }
+        return "arrow.up.circle"
     }
 
     private func toggleSelected() {
@@ -546,6 +599,53 @@ struct ImportPopoverView: View {
     @EnvironmentObject var appState: AppState
     @ObservedObject var downloadManager: DownloadManager
 
+    /// Calculate content height based on what's being displayed
+    private var contentHeight: CGFloat {
+        var height: CGFloat = 0
+
+        // Pending import takes most space
+        if let pending = appState.pendingImport {
+            if pending.isLoading {
+                height += 60
+            } else if pending.error != nil {
+                height += 70
+            } else {
+                // Mod info + file selection
+                height += 120 // Base mod info
+                if pending.files.count > 1 {
+                    let archivedCount = pending.files.filter { $0.isArchived }.count
+                    let currentCount = pending.files.count - archivedCount
+
+                    height += CGFloat(currentCount) * 52 // Current file rows
+                    if archivedCount > 0 {
+                        height += 40 // Archived separator
+                        height += CGFloat(archivedCount) * 52 // Archived file rows
+                    }
+                }
+                height += 60 // Install button area
+            }
+        }
+
+        // Downloads (only Browse mode downloads, not profile downloads)
+        let browseDownloads = downloadManager.downloads.filter { !$0.isProfileDownload }
+        height += CGFloat(browseDownloads.count) * 80
+
+        // Empty state
+        if browseDownloads.isEmpty && appState.pendingImport == nil {
+            height += 80
+        }
+
+        // Padding
+        height += 32
+
+        return height
+    }
+
+    /// Clamped height with min/max bounds
+    private var clampedHeight: CGFloat {
+        min(max(contentHeight, 100), 500)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -553,7 +653,7 @@ struct ImportPopoverView: View {
                 Text("Downloads")
                     .font(.headline)
                 Spacer()
-                if !downloadManager.downloads.isEmpty {
+                if downloadManager.downloads.contains(where: { !$0.isProfileDownload }) {
                     Button(action: { appState.closeDownloadPopover() }) {
                         Text("Clear All")
                             .font(.caption)
@@ -572,20 +672,21 @@ struct ImportPopoverView: View {
                     // Show pending import first
                     if let pending = appState.pendingImport {
                         importConfirmationView(pending: pending)
-                        if !downloadManager.downloads.isEmpty {
+                        if downloadManager.downloads.contains(where: { !$0.isProfileDownload }) {
                             Divider()
                         }
                     }
 
-                    // Show all downloads
-                    ForEach(downloadManager.downloads) { download in
+                    // Show only Browse mode downloads (not profile downloads)
+                    ForEach(downloadManager.downloads.filter { !$0.isProfileDownload }) { download in
                         DownloadProgressRow(download: download, onClear: {
                             appState.clearDownload(download)
                         })
                     }
 
                     // Empty state
-                    if downloadManager.downloads.isEmpty && appState.pendingImport == nil {
+                    let browseDownloads = downloadManager.downloads.filter { !$0.isProfileDownload }
+                    if browseDownloads.isEmpty && appState.pendingImport == nil {
                         VStack(spacing: 8) {
                             Image(systemName: "arrow.down.circle")
                                 .font(.title)
@@ -599,9 +700,10 @@ struct ImportPopoverView: View {
                 }
                 .padding()
             }
-            .frame(maxHeight: 400)
+            .frame(height: clampedHeight)
         }
-        .frame(width: 400)
+        .frame(width: 420)
+        .animation(.easeInOut(duration: 0.2), value: clampedHeight)
     }
 
     // MARK: - Import Confirmation View
@@ -669,13 +771,44 @@ struct ImportPopoverView: View {
                     // File selection (if multiple files)
                     if pending.files.count > 1 {
                         Divider().padding(.vertical, 8)
+
+                        let currentFiles = pending.files.filter { !$0.isArchived }
+                        let archivedFiles = pending.files.filter { $0.isArchived }
+
                         VStack(spacing: 6) {
-                            ForEach(pending.files) { f in
+                            // Current files (non-archived)
+                            ForEach(currentFiles) { f in
                                 CompactFileRow(
                                     file: f,
                                     isSelected: f.fileId == file.fileId,
-                                    onSelect: { appState.selectImportFile(f) }
+                                    onSelect: { appState.selectImportFile(f) },
+                                    badge: .none
                                 )
+                            }
+
+                            // Archived versions separator and list
+                            if !archivedFiles.isEmpty {
+                                HStack {
+                                    Rectangle()
+                                        .fill(Color.secondary.opacity(0.3))
+                                        .frame(height: 1)
+                                    Text("Archived")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                    Rectangle()
+                                        .fill(Color.secondary.opacity(0.3))
+                                        .frame(height: 1)
+                                }
+                                .padding(.vertical, 4)
+
+                                ForEach(archivedFiles) { f in
+                                    CompactFileRow(
+                                        file: f,
+                                        isSelected: f.fileId == file.fileId,
+                                        onSelect: { appState.selectImportFile(f) },
+                                        badge: .archived
+                                    )
+                                }
                             }
                         }
                     }
@@ -792,11 +925,18 @@ struct DownloadProgressRow: View {
     }
 }
 
+/// Badge type for file rows
+enum FileBadge {
+    case archived
+    case none
+}
+
 /// Compact file selection row for popover
 struct CompactFileRow: View {
     let file: GameBananaFile
     let isSelected: Bool
     let onSelect: () -> Void
+    var badge: FileBadge = .none
 
     var body: some View {
         Button(action: onSelect) {
@@ -805,9 +945,21 @@ struct CompactFileRow: View {
                     .foregroundColor(isSelected ? .accentColor : .secondary)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(file.filename)
-                        .font(.caption)
-                        .lineLimit(1)
+                    HStack(spacing: 4) {
+                        Text(file.filename)
+                            .font(.caption)
+                            .lineLimit(1)
+
+                        // Archived badge
+                        if badge == .archived {
+                            Text("Old")
+                                .font(.system(size: 8, weight: .medium))
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(Capsule().stroke(Color.secondary.opacity(0.5), lineWidth: 0.5))
+                        }
+                    }
                     Text(file.formattedFilesize)
                         .font(.caption2)
                         .foregroundColor(.secondary)

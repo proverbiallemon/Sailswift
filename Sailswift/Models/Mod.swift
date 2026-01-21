@@ -43,6 +43,17 @@ struct Mod: Identifiable, Hashable {
         return ""
     }
 
+    /// Stable identifier for profile matching (folderPath/name.baseType)
+    /// This stays the same whether the mod is enabled or disabled
+    /// Includes baseType to distinguish .otr from .o2r files with the same name
+    var stableId: String {
+        let baseType = fileExtension.baseType
+        if folderPath.isEmpty {
+            return "\(name).\(baseType)"
+        }
+        return "\(folderPath)/\(name).\(baseType)"
+    }
+
     init(path: URL, relativePath: String) {
         self.path = path
         self.relativePath = relativePath
@@ -113,6 +124,17 @@ enum ModFileExtension: String, CaseIterable {
             return true
         case .disabled, .di2abled:
             return false
+        }
+    }
+
+    /// The base mod type (otr or o2r) regardless of enabled state
+    /// Used to distinguish different mod types with the same name
+    var baseType: String {
+        switch self {
+        case .otr, .disabled:
+            return "otr"
+        case .o2r, .di2abled:
+            return "o2r"
         }
     }
 

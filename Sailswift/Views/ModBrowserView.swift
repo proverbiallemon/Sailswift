@@ -6,7 +6,13 @@ struct ModBrowserView: View {
     @ObservedObject private var cache = GameBananaModCache.shared
     @State private var webViewURL: URL?
     @State private var localFilter = ""
-    @State private var selectedCategory: ModCategory = .all
+    @State private var selectedCategory: ModCategoryFilter = .all
+    @State private var selectedSort: ModSortOption = .newest
+
+    /// Dynamic category list based on cached mods
+    private var categoryFilters: [ModCategoryFilter] {
+        ModCategoryFilter.fromMods(cache.mods)
+    }
 
     var body: some View {
         if let url = webViewURL {
@@ -55,9 +61,18 @@ struct ModBrowserView: View {
             .frame(maxWidth: 250)
 
             Picker("Category", selection: $selectedCategory) {
-                ForEach(ModCategory.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                ForEach(categoryFilters) { category in
+                    Text(category.displayName).tag(category)
+                }
             }
-            .frame(width: 140)
+            .frame(width: 180)
+
+            Picker("Sort", selection: $selectedSort) {
+                ForEach(ModSortOption.allCases, id: \.self) { option in
+                    Text(option.displayName).tag(option)
+                }
+            }
+            .frame(width: 130)
 
             Spacer()
 
@@ -99,8 +114,8 @@ struct ModBrowserView: View {
         var mods = cache.mods
 
         // Filter by category
-        if selectedCategory != .all {
-            mods = mods.filter { $0.category.lowercased() == selectedCategory.rawValue.lowercased() }
+        if selectedCategory.name != "All" {
+            mods = mods.filter { $0.category == selectedCategory.name }
         }
 
         // Apply fuzzy filter if there's filter text
@@ -117,6 +132,18 @@ struct ModBrowserView: View {
                 }
                 .sorted { $0.score > $1.score }
                 .map { $0.mod }
+        } else {
+            // Apply sort when not using fuzzy filter (fuzzy already sorts by relevance)
+            switch selectedSort {
+            case .newest:
+                mods.sort { ($0.dateAdded ?? .distantPast) > ($1.dateAdded ?? .distantPast) }
+            case .updated:
+                mods.sort { ($0.dateUpdated ?? .distantPast) > ($1.dateUpdated ?? .distantPast) }
+            case .popular:
+                mods.sort { $0.viewCount > $1.viewCount }
+            case .mostLiked:
+                mods.sort { $0.likeCount > $1.likeCount }
+            }
         }
 
         return mods

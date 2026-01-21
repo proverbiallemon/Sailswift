@@ -30,7 +30,8 @@ class GameConfigService {
         guard let enabledMods = config.cvars?.gSettings?.enabledMods, !enabledMods.isEmpty else {
             return []
         }
-        return enabledMods.components(separatedBy: "|")
+        // Filter out empty strings that could result from leading/trailing/consecutive pipes
+        return enabledMods.components(separatedBy: "|").filter { !$0.isEmpty }
     }
 
     /// Set the mod load order in the configuration
@@ -44,7 +45,13 @@ class GameConfigService {
             config.cvars?.gSettings = GSettings()
         }
 
-        config.cvars?.gSettings?.enabledMods = order.joined(separator: "|")
+        // Sanitize mod names: replace pipe characters to prevent parsing issues,
+        // and filter out empty strings
+        let sanitizedOrder = order
+            .filter { !$0.isEmpty }
+            .map { $0.replacingOccurrences(of: "|", with: "-") }
+
+        config.cvars?.gSettings?.enabledMods = sanitizedOrder.joined(separator: "|")
         try saveConfig(config)
     }
 

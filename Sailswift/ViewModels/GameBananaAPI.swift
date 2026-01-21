@@ -134,6 +134,10 @@ class GameBananaAPI {
     private func parseModRecord(_ record: [String: Any]) -> GameBananaMod? {
         guard let modId = record["_idRow"] as? Int else { return nil }
 
+        // Filter out non-downloadable content types
+        let modelName = record["_sModelName"] as? String ?? "Mod"
+        if modelName == "Question" { return nil }
+
         var imageURL: URL? = nil
         if let previewMedia = record["_aPreviewMedia"] as? [String: Any],
            let images = previewMedia["_aImages"] as? [[String: Any]],
@@ -211,13 +215,23 @@ class GameBananaAPI {
     }
 
     /// Parse an array of file info dictionaries into GameBananaFile objects
+    /// Returns files sorted: non-archived first (by date), then archived (by date)
     private func parseFileArray(_ files: [[String: Any]]) -> [GameBananaFile] {
-        return files.compactMap { fileInfo -> GameBananaFile? in
+        let parsed = files.compactMap { fileInfo -> GameBananaFile? in
             guard let fileId = fileInfo["_idRow"] as? Int,
                   let downloadURLString = fileInfo["_sDownloadUrl"] as? String,
                   let downloadURL = URL(string: downloadURLString) else {
                 return nil
             }
+
+            // Parse date added timestamp
+            var dateAdded: Date? = nil
+            if let timestamp = fileInfo["_tsDateAdded"] as? Int {
+                dateAdded = Date(timeIntervalSince1970: TimeInterval(timestamp))
+            }
+
+            // Parse archived status
+            let isArchived = fileInfo["_bIsArchived"] as? Bool ?? false
 
             return GameBananaFile(
                 fileId: fileId,
@@ -226,8 +240,22 @@ class GameBananaAPI {
                 downloadURL: downloadURL,
                 downloadCount: fileInfo["_nDownloadCount"] as? Int ?? 0,
                 md5: fileInfo["_sMd5Checksum"] as? String ?? "",
-                analysisResult: fileInfo["_sAnalysisResult"] as? String ?? ""
+                analysisResult: fileInfo["_sAnalysisResult"] as? String ?? "",
+                dateAdded: dateAdded,
+                isArchived: isArchived
             )
+        }
+
+        // Sort: non-archived first (by date desc), then archived (by date desc)
+        return parsed.sorted { file1, file2 in
+            // Non-archived files come before archived
+            if file1.isArchived != file2.isArchived {
+                return !file1.isArchived
+            }
+            // Within same archive status, sort by date (newest first)
+            guard let date1 = file1.dateAdded else { return false }
+            guard let date2 = file2.dateAdded else { return true }
+            return date1 > date2
         }
     }
 
@@ -264,6 +292,15 @@ class GameBananaAPI {
             return nil
         }
 
+        // Parse date added timestamp
+        var dateAdded: Date? = nil
+        if let timestamp = fileInfo["_tsDateAdded"] as? Int {
+            dateAdded = Date(timeIntervalSince1970: TimeInterval(timestamp))
+        }
+
+        // Parse archived status
+        let isArchived = fileInfo["_bIsArchived"] as? Bool ?? false
+
         return GameBananaFile(
             fileId: fileId,
             filename: fileInfo["_sFile"] as? String ?? "",
@@ -271,7 +308,9 @@ class GameBananaAPI {
             downloadURL: downloadURL,
             downloadCount: fileInfo["_nDownloadCount"] as? Int ?? 0,
             md5: fileInfo["_sMd5Checksum"] as? String ?? "",
-            analysisResult: fileInfo["_sAnalysisResult"] as? String ?? ""
+            analysisResult: fileInfo["_sAnalysisResult"] as? String ?? "",
+            dateAdded: dateAdded,
+            isArchived: isArchived
         )
     }
 }

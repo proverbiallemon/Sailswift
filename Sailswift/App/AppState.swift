@@ -1,6 +1,97 @@
  import SwiftUI
 import Combine
 
+/// A notification message for the ticker
+struct NotificationMessage: Identifiable {
+    let id = UUID()
+    let text: String
+    let type: NotificationType
+    let timestamp: Date
+
+    init(_ text: String, type: NotificationType = .info) {
+        self.text = text
+        self.type = type
+        self.timestamp = Date()
+    }
+
+    enum NotificationType {
+        case info
+        case success
+        case warning
+        case error
+
+        var color: Color {
+            switch self {
+            case .info: return .secondary
+            case .success: return .green
+            case .warning: return .orange
+            case .error: return .red
+            }
+        }
+    }
+}
+
+/// Tracks a mod download initiated by profile application
+struct ProfileDownloadProgress: Identifiable {
+    let id = UUID()
+    let modName: String
+    let folderName: String
+    var fileId: Int = 0  // Used to correlate with DownloadManager
+    var progress: Double = 0
+    var status: ProfileDownloadStatus = .downloading
+    var bytesDownloaded: Int64 = 0
+    var totalBytes: Int64 = 0
+    var isDismissing: Bool = false  // Triggers swipe-out animation
+
+    var progressText: String {
+        switch status {
+        case .downloading:
+            if totalBytes > 0 {
+                let downloaded = ByteCountFormatter.string(fromByteCount: bytesDownloaded, countStyle: .file)
+                let total = ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file)
+                return "\(downloaded) / \(total)"
+            }
+            return "Downloading..."
+        case .extracting:
+            return "Extracting..."
+        case .completed:
+            return "Complete"
+        case .failed:
+            return "Failed"
+        }
+    }
+}
+
+enum ProfileDownloadStatus {
+    case downloading
+    case extracting
+    case completed
+    case failed
+}
+
+/// Tracks a pending batch deletion for confirmation
+struct PendingDeletion: Identifiable {
+    let id = UUID()
+    let folderPaths: [String]  // Relative paths of folders to delete
+    let modCount: Int          // Total number of mods in these folders
+
+    var confirmationText: String {
+        if folderPaths.count == 1 {
+            return "Delete \(folderPaths.first ?? "folder")?"
+        } else {
+            return "Delete \(folderPaths.count) folders (\(modCount) mods)?"
+        }
+    }
+
+    var tickerText: String {
+        if folderPaths.count == 1 {
+            return "Delete \(folderPaths.first ?? "folder")? Click to confirm."
+        } else {
+            return "Delete \(folderPaths.count) folders (\(modCount) mods)? Click to confirm."
+        }
+    }
+}
+
 /// Represents a pending mod import from URL scheme or browse view
 struct PendingImport: Identifiable {
     let id = UUID()
@@ -42,6 +133,22 @@ class AppState: ObservableObject {
     // Mod load order (mod names in priority order - later = higher priority)
     @Published var modLoadOrder: [String] = []
 
+    // Profile downloads in progress (shown as placeholders in mod list)
+    @Published var profileDownloads: [ProfileDownloadProgress] = []
+    private var profileDownloadsScheduledForRemoval: Set<UUID> = []
+
+    // Notification ticker
+    @Published var notifications: [NotificationMessage] = []
+    @Published var currentTickerMessage: NotificationMessage?
+    @Published var showNotificationPopover = false
+
+    // Confirmation ticker (for destructive actions)
+    @Published var pendingDeletion: PendingDeletion?
+    @Published var showDeleteConfirmPopover = false
+
+    // Multi-selection
+    @Published var selectedFolders: Set<String> = []  // Folder paths selected for batch operations
+
     // MARK: - Settings
 
     @AppStorage("gamePath") var gamePath: String = ""
@@ -55,6 +162,11 @@ class AppState: ObservableObject {
     let downloadManager = DownloadManager()
     let gameConfigService = GameConfigService()
     let updaterService = UpdaterService.shared
+    let modUpdateChecker = ModUpdateChecker.shared
+    let profileManager = ModProfileManager.shared
+    let modpackManager = ModpackManager.shared
+
+    private var downloadCancellable: AnyCancellable?
 
     // MARK: - Computed Properties
 
@@ -85,11 +197,13 @@ class AppState: ObservableObject {
         // Load mod load order from config
         loadModLoadOrder()
 
-        // Set up download completion callback
-        downloadManager.onDownloadComplete = { [weak self] success, message in
+        // Set up download completion callback - only profile downloads go to ticker
+        downloadManager.onDownloadComplete = { [weak self] success, message, isProfileDownload in
             Task { @MainActor in
-                self?.downloadAlertMessage = message
-                self?.showDownloadAlert = true
+                // Only add to ticker for profile downloads (Browse downloads stay in popover)
+                if isProfileDownload {
+                    self?.addNotification(message, type: success ? .success : .error)
+                }
                 if success {
                     await self?.loadMods()
                 }
@@ -109,6 +223,14 @@ class AppState: ObservableObject {
                 self?.showUnrarMissingAlert = true
             }
         }
+
+        // Observe download manager to sync profile download progress
+        // Throttle to max 10 updates/second to prevent UI lag with many downloads
+        downloadCancellable = downloadManager.$downloads
+            .throttle(for: .milliseconds(100), scheduler: DispatchQueue.main, latest: true)
+            .sink { [weak self] downloads in
+                self?.syncProfileDownloadProgress(from: downloads)
+            }
 
         // Load mods
         Task {
@@ -166,7 +288,37 @@ class AppState: ObservableObject {
 
     func toggleFolder(_ folderPath: URL) async {
         do {
+            // Get the relative path of the folder being toggled
+            let folderRelativePath = folderPath.path.replacingOccurrences(
+                of: modsDirectory.path + "/",
+                with: ""
+            )
+
+            // Get mods in this folder (mods whose path starts with or equals the folder path)
+            let modsInFolder = mods.filter { mod in
+                mod.folderPath == folderRelativePath ||
+                mod.folderPath.hasPrefix(folderRelativePath + "/")
+            }
+            let wereEnabled = modsInFolder.first?.isEnabled ?? false
+
             try await modManager.toggleModsInFolder(folderPath)
+
+            // Update load order based on toggle direction
+            if wereEnabled {
+                // Mods were enabled, now disabled - remove from load order
+                for mod in modsInFolder {
+                    modLoadOrder.removeAll { $0 == mod.name }
+                }
+            } else {
+                // Mods were disabled, now enabled - add to load order
+                for mod in modsInFolder {
+                    if !modLoadOrder.contains(mod.name) {
+                        modLoadOrder.append(mod.name)
+                    }
+                }
+            }
+            syncLoadOrderToConfig()
+
             await loadMods()
             statusMessage = "Toggled mods in folder"
         } catch {
@@ -276,6 +428,101 @@ class AppState: ObservableObject {
         } catch {
             statusMessage = "Error deleting folder: \(error.localizedDescription)"
         }
+    }
+
+    // MARK: - Multi-Selection & Batch Delete
+
+    /// Toggle folder selection (for Command+click multi-select)
+    func toggleFolderSelection(_ folderPath: String) {
+        if selectedFolders.contains(folderPath) {
+            selectedFolders.remove(folderPath)
+        } else {
+            selectedFolders.insert(folderPath)
+        }
+    }
+
+    /// Clear all folder selections
+    func clearFolderSelection() {
+        selectedFolders.removeAll()
+    }
+
+    /// Check if a folder is selected
+    func isFolderSelected(_ folderPath: String) -> Bool {
+        selectedFolders.contains(folderPath)
+    }
+
+    /// Request deletion of selected folders (shows confirmation ticker)
+    func requestDeleteSelectedFolders() {
+        guard !selectedFolders.isEmpty else { return }
+
+        // Count mods in selected folders
+        let modCount = mods.filter { mod in
+            selectedFolders.contains(where: { folderPath in
+                mod.folderPath == folderPath || mod.folderPath.hasPrefix(folderPath + "/")
+            })
+        }.count
+
+        pendingDeletion = PendingDeletion(
+            folderPaths: Array(selectedFolders),
+            modCount: modCount
+        )
+    }
+
+    /// Request deletion of a single folder (shows confirmation ticker)
+    func requestDeleteFolder(_ folderPath: String) {
+        let modCount = mods.filter { mod in
+            mod.folderPath == folderPath || mod.folderPath.hasPrefix(folderPath + "/")
+        }.count
+
+        // Add to selection and create pending deletion
+        selectedFolders = [folderPath]
+        pendingDeletion = PendingDeletion(
+            folderPaths: [folderPath],
+            modCount: modCount
+        )
+    }
+
+    /// Confirm and execute the pending deletion
+    func confirmPendingDeletion() async {
+        guard let pending = pendingDeletion else { return }
+
+        var deletedCount = 0
+        for folderPath in pending.folderPaths {
+            let folderURL = modsDirectory.appendingPathComponent(folderPath)
+            do {
+                try FileManager.default.removeItem(at: folderURL)
+                deletedCount += 1
+
+                // Remove from load order
+                let modsInFolder = mods.filter { $0.folderPath == folderPath || $0.folderPath.hasPrefix(folderPath + "/") }
+                for mod in modsInFolder {
+                    modLoadOrder.removeAll { $0 == mod.name }
+                }
+            } catch {
+                print("Error deleting folder \(folderPath): \(error)")
+            }
+        }
+
+        syncLoadOrderToConfig()
+        await loadMods()
+
+        // Clear state
+        pendingDeletion = nil
+        selectedFolders.removeAll()
+        showDeleteConfirmPopover = false
+
+        // Notify via ticker
+        let message = deletedCount == 1
+            ? "Deleted \(pending.folderPaths.first ?? "folder")"
+            : "Deleted \(deletedCount) folders"
+        addNotification(message, type: .info)
+    }
+
+    /// Cancel the pending deletion
+    func cancelPendingDeletion() {
+        pendingDeletion = nil
+        selectedFolders.removeAll()
+        showDeleteConfirmPopover = false
     }
 
     // MARK: - Game Operations
@@ -419,12 +666,13 @@ class AppState: ObservableObject {
         await downloadManager.downloadFile(file, modName: modName, modId: modId)
     }
 
-    /// Cancel the pending import (but keep popover open if there are active downloads)
+    /// Cancel the pending import (but keep popover open if there are active Browse mode downloads)
     func cancelImport() {
         showImportConfirmation = false
         pendingImport = nil
-        // Only close popover if there are no active downloads
-        if downloadManager.downloads.allSatisfy({ $0.status == .completed || $0.status == .failed }) {
+        // Only close popover if there are no active Browse mode downloads
+        let browseDownloads = downloadManager.downloads.filter { !$0.isProfileDownload }
+        if browseDownloads.allSatisfy({ $0.status == .completed || $0.status == .failed }) {
             showDownloadPopover = false
         }
     }
@@ -434,11 +682,13 @@ class AppState: ObservableObject {
         showDownloadPopover.toggle()
     }
 
-    /// Close the download popover and clear completed downloads
+    /// Close the download popover and clear completed Browse mode downloads
     func closeDownloadPopover() {
         showDownloadPopover = false
-        // Clear completed/failed downloads when closing
-        downloadManager.downloads.removeAll { $0.status == .completed || $0.status == .failed }
+        // Clear completed/failed Browse mode downloads when closing (not profile downloads)
+        downloadManager.downloads.removeAll {
+            !$0.isProfileDownload && ($0.status == .completed || $0.status == .failed)
+        }
         downloadManager.currentDownload = nil
     }
 
@@ -476,5 +726,356 @@ class AppState: ObservableObject {
     /// Check if unar is available
     var isUnarInstalled: Bool {
         downloadManager.isUnarAvailable()
+    }
+
+    // MARK: - Mod Update Checking
+
+    /// Check installed mods for available updates from GameBanana
+    func checkForModUpdates() async {
+        await modUpdateChecker.checkForUpdates(modsDirectory: modsDirectory)
+    }
+
+    /// Check if a mod folder has an update available
+    func hasModUpdate(for folderPath: String) -> Bool {
+        modUpdateChecker.hasUpdate(for: folderPath)
+    }
+
+    /// Get the number of mods with available updates
+    var modUpdatesAvailable: Int {
+        modUpdateChecker.updates.count
+    }
+
+    // MARK: - Profile Management
+
+    /// Save current mod state as a new profile
+    func saveProfile(name: String) {
+        profileManager.saveCurrentState(name: name, mods: mods, loadOrder: modLoadOrder, modsDirectory: modsDirectory)
+        let message = "Profile '\(name)' saved"
+        statusMessage = message
+        addNotification(message, type: .success)
+    }
+
+    /// Apply a saved profile
+    func applyProfile(_ profile: ModProfile) async {
+        statusMessage = "Applying profile '\(profile.name)'..."
+
+        var changesApplied = 0
+        var modsDownloading = 0
+        var modsNotFound = 0
+        var modsDisabled = 0
+
+        // Collect downloads to start (we'll start them after toggling existing mods)
+        var downloadsToStart: [(file: GameBananaFile, modName: String, modId: Int, folderName: String)] = []
+        // Track which GameBanana mod IDs we've already queued to prevent duplicate downloads
+        var queuedModIds: Set<Int> = []
+
+        // Determine which format the profile uses
+        let useNewFormat = !profile.modInfos.isEmpty
+
+        // First: Disable any mods that are NOT in the profile
+        // This handles mods downloaded after the profile was created
+        let profileStableIds: Set<String>
+        if useNewFormat {
+            profileStableIds = Set(profile.modInfos.keys)
+        } else if let legacyStates = profile.modStates {
+            profileStableIds = Set(legacyStates.keys)
+        } else {
+            profileStableIds = []
+        }
+
+        for mod in mods where mod.isEnabled {
+            if !profileStableIds.contains(mod.stableId) {
+                // This enabled mod is not in the profile - disable it
+                do {
+                    try await modManager.toggleMod(mod)
+                    modsDisabled += 1
+                } catch {
+                    print("Error disabling mod \(mod.name): \(error)")
+                }
+            }
+        }
+
+        if useNewFormat {
+            // New format with modInfos
+            for (stableId, info) in profile.modInfos {
+                // Find mod by stableId
+                if let mod = mods.first(where: { $0.stableId == stableId }) {
+                    // Mod exists - toggle if needed
+                    if mod.isEnabled != info.isEnabled {
+                        do {
+                            try await modManager.toggleMod(mod)
+                            changesApplied += 1
+                        } catch {
+                            print("Error toggling mod \(mod.name): \(error)")
+                        }
+                    }
+                } else if let modId = info.gameBananaModId {
+                    // Mod is missing but has GameBanana ID - fetch files first
+                    // Only download each mod ID once (multiple mods in same folder share the ID)
+                    if !queuedModIds.contains(modId) {
+                        queuedModIds.insert(modId)
+                        do {
+                            let files = try await GameBananaAPI.shared.fetchModFiles(modId: modId)
+                            if let file = files.first {
+                                let modName = info.gameBananaName ?? info.folderName
+                                downloadsToStart.append((file, modName, modId, info.folderName))
+                                modsDownloading += 1
+                            } else {
+                                modsNotFound += 1
+                            }
+                        } catch {
+                            print("Error fetching mod files for \(info.folderName): \(error)")
+                            modsNotFound += 1
+                        }
+                    }
+                } else {
+                    // Mod is missing and can't be downloaded
+                    modsNotFound += 1
+                }
+            }
+        } else if let legacyStates = profile.modStates {
+            // Legacy format with modStates
+            for (savedId, shouldBeEnabled) in legacyStates {
+                var mod = mods.first(where: { $0.stableId == savedId })
+
+                // Backwards compatibility: try stripping extensions
+                if mod == nil {
+                    let extensions = ["otr", "o2r", "disabled", "di2abled"]
+                    for ext in extensions {
+                        if savedId.hasSuffix(".\(ext)") {
+                            let withoutExt = String(savedId.dropLast(ext.count + 1))
+                            mod = mods.first(where: { $0.stableId == withoutExt })
+                            if mod != nil { break }
+                        }
+                    }
+                }
+
+                guard let mod = mod else {
+                    modsNotFound += 1
+                    continue
+                }
+
+                if mod.isEnabled != shouldBeEnabled {
+                    do {
+                        try await modManager.toggleMod(mod)
+                        changesApplied += 1
+                    } catch {
+                        print("Error toggling mod \(mod.name): \(error)")
+                    }
+                }
+            }
+        }
+
+        // Apply load order
+        modLoadOrder = profile.loadOrder
+        syncLoadOrderToConfig()
+
+        // Set as active profile
+        profileManager.activeProfileId = profile.id
+
+        // Reload mods to reflect changes
+        await loadMods()
+
+        // Create profile download entries and start downloads with staggered timing
+        for (index, download) in downloadsToStart.enumerated() {
+            var progressEntry = ProfileDownloadProgress(
+                modName: download.modName,
+                folderName: download.folderName
+            )
+            progressEntry.fileId = download.file.fileId
+            profileDownloads.append(progressEntry)
+
+            // Stagger download starts by 200ms each to prevent network/UI overload
+            let delay = Double(index) * 0.2
+            Task {
+                if delay > 0 {
+                    try? await Task.sleep(for: .seconds(delay))
+                }
+                await downloadManager.downloadFile(download.file, modName: download.modName, modId: download.modId, isProfileDownload: true)
+            }
+        }
+
+        // Build status message and notification
+        var statusParts: [String] = []
+        if modsDisabled > 0 {
+            statusParts.append("\(modsDisabled) disabled")
+        }
+        if changesApplied > 0 {
+            statusParts.append("\(changesApplied) toggled")
+        }
+        if modsDownloading > 0 {
+            statusParts.append("\(modsDownloading) downloading")
+        }
+        if modsNotFound > 0 {
+            statusParts.append("\(modsNotFound) not found")
+        }
+
+        let message: String
+        let notificationType: NotificationMessage.NotificationType
+
+        if statusParts.isEmpty {
+            message = "Applied '\(profile.name)' (no changes needed)"
+            notificationType = .info
+        } else {
+            message = "Applied '\(profile.name)': \(statusParts.joined(separator: ", "))"
+            notificationType = modsNotFound > 0 ? .warning : .success
+        }
+
+        statusMessage = message
+        addNotification(message, type: notificationType)
+    }
+
+    /// Update an existing profile with current state
+    func updateProfile(_ profile: ModProfile) {
+        profileManager.updateProfile(id: profile.id, mods: mods, loadOrder: modLoadOrder, modsDirectory: modsDirectory)
+        let message = "Profile '\(profile.name)' updated"
+        statusMessage = message
+        addNotification(message, type: .success)
+    }
+
+    /// Delete a profile
+    func deleteProfile(_ profile: ModProfile) {
+        profileManager.deleteProfile(id: profile.id)
+        let message = "Profile '\(profile.name)' deleted"
+        statusMessage = message
+        addNotification(message, type: .info)
+    }
+
+    // MARK: - Notification Ticker
+
+    /// Add a notification to the ticker
+    func addNotification(_ text: String, type: NotificationMessage.NotificationType = .info) {
+        let notification = NotificationMessage(text, type: type)
+        notifications.insert(notification, at: 0)
+
+        // Keep only last 50 notifications
+        if notifications.count > 50 {
+            notifications = Array(notifications.prefix(50))
+        }
+
+        // Set as current ticker message
+        currentTickerMessage = notification
+    }
+
+    /// Clear a specific notification
+    func clearNotification(_ notification: NotificationMessage) {
+        notifications.removeAll { $0.id == notification.id }
+    }
+
+    /// Clear all notifications
+    func clearAllNotifications() {
+        notifications.removeAll()
+        currentTickerMessage = nil
+    }
+
+    /// Sync profile download progress from DownloadManager
+    private func syncProfileDownloadProgress(from downloads: [Download]) {
+        for i in profileDownloads.indices {
+            let fileId = profileDownloads[i].fileId
+            guard fileId > 0, let download = downloads.first(where: { $0.fileId == fileId }) else {
+                continue
+            }
+
+            profileDownloads[i].progress = download.progress
+            profileDownloads[i].bytesDownloaded = download.downloadedBytes
+            profileDownloads[i].totalBytes = download.totalBytes
+
+            switch download.status {
+            case .pending, .downloading:
+                profileDownloads[i].status = .downloading
+            case .extracting:
+                profileDownloads[i].status = .extracting
+            case .completed:
+                profileDownloads[i].status = .completed
+            case .failed:
+                profileDownloads[i].status = .failed
+            }
+        }
+
+        // Animate out completed/failed downloads one at a time, top to bottom
+        // Each item: swipe out, pause, then next item
+        let completedIndices = profileDownloads.enumerated()
+            .filter { $0.element.status == .completed || $0.element.status == .failed }
+            .filter { !$0.element.isDismissing }
+            .filter { !profileDownloadsScheduledForRemoval.contains($0.element.id) }
+            .map { (index: $0.offset, id: $0.element.id) }
+
+        for (order, item) in completedIndices.enumerated() {
+            profileDownloadsScheduledForRemoval.insert(item.id)
+            Task { @MainActor in
+                // Initial delay before first item, then sequential timing
+                // First at 2s, second at 3.5s, third at 5s (1.5s apart each)
+                let delay = 2.0 + (Double(order) * 1.5)
+                try? await Task.sleep(for: .seconds(delay))
+
+                // Remove with Poof animation
+                withAnimation {
+                    profileDownloads.removeAll { $0.id == item.id }
+                }
+                profileDownloadsScheduledForRemoval.remove(item.id)
+            }
+        }
+    }
+
+    // MARK: - Modpack Export/Import
+
+    /// Create a modpack from the current state
+    func createModpack(name: String, author: String, description: String) -> Modpack {
+        Modpack.fromCurrentState(
+            name: name,
+            author: author,
+            description: description,
+            mods: mods,
+            loadOrder: modLoadOrder,
+            modsDirectory: modsDirectory
+        )
+    }
+
+    /// Export a modpack to a file
+    func exportModpack(_ modpack: Modpack, to url: URL) {
+        do {
+            try modpackManager.exportModpack(modpack, to: url)
+            statusMessage = "Modpack '\(modpack.name)' exported"
+        } catch {
+            statusMessage = "Error exporting modpack: \(error.localizedDescription)"
+        }
+    }
+
+    /// Import and install a modpack from a file
+    func importModpack(from url: URL) async {
+        do {
+            let modpack = try modpackManager.importModpack(from: url)
+            statusMessage = "Importing modpack '\(modpack.name)'..."
+
+            // Install mods from the modpack
+            let result = await modpackManager.installModpack(
+                modpack,
+                modsDirectory: modsDirectory
+            ) { [weak self] entry in
+                guard let self = self, let modId = entry.gameBananaModId else { return false }
+
+                // Fetch mod files and download the first one
+                do {
+                    let files = try await GameBananaAPI.shared.fetchModFiles(modId: modId)
+                    guard let file = files.first else { return false }
+
+                    let modName = entry.gameBananaName ?? entry.folderName
+                    await self.downloadManager.downloadFile(file, modName: modName, modId: modId, isProfileDownload: true)
+                    return true
+                } catch {
+                    print("Error downloading mod \(entry.folderName): \(error)")
+                    return false
+                }
+            }
+
+            // Apply load order from modpack
+            modLoadOrder = modpack.loadOrder
+            syncLoadOrderToConfig()
+
+            await loadMods()
+            statusMessage = "Imported '\(modpack.name)': \(result.installed) installed, \(result.skipped) skipped, \(result.failed) failed"
+        } catch {
+            statusMessage = "Error importing modpack: \(error.localizedDescription)"
+        }
     }
 }

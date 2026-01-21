@@ -9,6 +9,7 @@ struct Download: Identifiable {
     let modName: String
     let fileId: Int
     let modId: Int?
+    let isProfileDownload: Bool  // True if this is a profile auto-download (shown in left sidebar only)
     var progress: Double = 0
     var totalBytes: Int64 = 0
     var downloadedBytes: Int64 = 0
@@ -69,8 +70,13 @@ class DownloadManager: ObservableObject {
     private let api = GameBananaAPI.shared
     private let fileService = FileService.shared
 
-    /// Callback to notify AppState of download completion
-    var onDownloadComplete: ((Bool, String) -> Void)?
+    /// Track last progress update time per download to throttle UI updates
+    private var lastProgressUpdate: [Int: (time: Date, progress: Double)] = [:]
+    private let progressUpdateInterval: TimeInterval = 0.1  // 100ms minimum between updates
+    private let progressUpdateThreshold: Double = 0.01       // Or 1% change
+
+    /// Callback to notify AppState of download completion (success, message, isProfileDownload)
+    var onDownloadComplete: ((Bool, String, Bool) -> Void)?
 
     /// Callback when 7-Zip is required but not installed
     var on7zMissing: (() -> Void)?
@@ -85,26 +91,26 @@ class DownloadManager: ObservableObject {
         print("[DownloadManager] Processing URL scheme download: itemId=\(itemId), fileId=\(fileId)")
 
         guard let fileIdInt = Int(fileId) else {
-            showResult(success: false, message: "Invalid file ID: \(fileId)")
+            showResult(success: false, message: "Invalid file ID: \(fileId)", isProfileDownload: false)
             return
         }
 
         do {
             guard let file = try await api.fetchFileInfo(fileId: fileIdInt) else {
-                showResult(success: false, message: "Could not find file information")
+                showResult(success: false, message: "Could not find file information", isProfileDownload: false)
                 return
             }
             // Use filename without extension as mod name for URL scheme downloads
             let modName = (file.filename as NSString).deletingPathExtension
             await downloadFile(file, modName: modName)
         } catch {
-            showResult(success: false, message: "Failed to get file info: \(error.localizedDescription)")
+            showResult(success: false, message: "Failed to get file info: \(error.localizedDescription)", isProfileDownload: false)
         }
     }
 
     /// Download a file from GameBanana using fast URLSessionDownloadTask
-    func downloadFile(_ file: GameBananaFile, modName: String, modId: Int? = nil) async {
-        var download = Download(filename: file.filename, modName: modName, fileId: file.fileId, modId: modId)
+    func downloadFile(_ file: GameBananaFile, modName: String, modId: Int? = nil, isProfileDownload: Bool = false) async {
+        var download = Download(filename: file.filename, modName: modName, fileId: file.fileId, modId: modId, isProfileDownload: isProfileDownload)
         download.status = .downloading
         download.statusMessage = "Starting download..."
         currentDownload = download
@@ -144,10 +150,10 @@ class DownloadManager: ObservableObject {
                     ? "Installed to \(sanitizeFolderName(modName))/"
                     : "Installed \(installedCount) files to \(sanitizeFolderName(modName))/"
                 updateDownloadStatus(fileId: file.fileId, status: .completed, message: message)
-                showResult(success: true, message: message)
+                showResult(success: true, message: message, isProfileDownload: isProfileDownload)
             } else {
                 updateDownloadStatus(fileId: file.fileId, status: .failed, message: "No mod files found")
-                showResult(success: false, message: "No mod files found in archive")
+                showResult(success: false, message: "No mod files found in archive", isProfileDownload: isProfileDownload)
             }
 
         } catch DownloadError.sevenZipNotFound {
@@ -158,7 +164,7 @@ class DownloadManager: ObservableObject {
             onUnrarMissing?()
         } catch {
             updateDownloadStatus(fileId: file.fileId, status: .failed, message: error.localizedDescription)
-            showResult(success: false, message: "Download failed: \(error.localizedDescription)")
+            showResult(success: false, message: "Download failed: \(error.localizedDescription)", isProfileDownload: isProfileDownload)
         }
 
         // Don't clear currentDownload here - keep it to show completion status
@@ -544,10 +550,33 @@ class DownloadManager: ObservableObject {
                 currentDownload?.statusMessage = message
             }
         }
+
+        // Clean up throttle cache when download finishes
+        if status == .completed || status == .failed {
+            lastProgressUpdate.removeValue(forKey: fileId)
+        }
     }
 
     private func updateDownloadProgress(fileId: Int, totalBytes: Int64, downloadedBytes: Int64) {
         let progress = totalBytes > 0 ? Double(downloadedBytes) / Double(totalBytes) : 0
+        let now = Date()
+
+        // Throttle updates: only update if enough time has passed OR progress changed significantly
+        if let last = lastProgressUpdate[fileId] {
+            let timeSinceLastUpdate = now.timeIntervalSince(last.time)
+            let progressChange = abs(progress - last.progress)
+
+            // Skip update unless: 100ms passed, 1% change, or download complete
+            if timeSinceLastUpdate < progressUpdateInterval &&
+               progressChange < progressUpdateThreshold &&
+               progress < 1.0 {
+                return
+            }
+        }
+
+        // Record this update
+        lastProgressUpdate[fileId] = (time: now, progress: progress)
+
         if let index = downloads.firstIndex(where: { $0.fileId == fileId }) {
             downloads[index].progress = progress
             downloads[index].totalBytes = totalBytes
@@ -560,8 +589,8 @@ class DownloadManager: ObservableObject {
         }
     }
 
-    private func showResult(success: Bool, message: String) {
-        onDownloadComplete?(success, message)
+    private func showResult(success: Bool, message: String, isProfileDownload: Bool) {
+        onDownloadComplete?(success, message, isProfileDownload)
     }
 
     /// Download file using URLSessionDownloadTask for browser-equivalent speed

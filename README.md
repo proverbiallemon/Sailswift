@@ -10,11 +10,11 @@ Native macOS mod manager for **Ship of Harkinian** - built with Swift and SwiftU
 
 ## Features
 
-- **Mod Management** - Enable, disable, delete mods with a native interface
-- **Load Order** - Drag-and-drop reordering synced with SoH config
+- **Mod Profiles** - Save and load configurations with auto-download of missing mods
+- **Modpack Sharing** - Export/import `.sailswiftpack` files to share with others
+- **Update Checker** - Check installed mods for GameBanana updates
 - **GameBanana Integration** - Browse, search, and download mods in-app
 - **One-Click Install** - `shipofharkinian://` URL scheme for seamless installation
-- **Auto-Updates** - Automatic update checking via Sparkle framework
 
 **[Full feature list →](https://github.com/proverbiallemon/Sailswift/wiki/Features)**
 

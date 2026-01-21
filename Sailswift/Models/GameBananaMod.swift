@@ -39,6 +39,8 @@ struct GameBananaFile: Identifiable, Hashable {
     let downloadCount: Int
     let md5: String
     let analysisResult: String
+    let dateAdded: Date?
+    let isArchived: Bool
 
     var id: Int { fileId }
 
@@ -47,31 +49,61 @@ struct GameBananaFile: Identifiable, Hashable {
     }
 }
 
-/// Categories available for Ship of Harkinian mods
-enum ModCategory: String, CaseIterable {
-    case all = "All Categories"
-    case models = "Models"
-    case textures = "Textures"
-    case otherMisc = "Other/Misc"
-    case samples = "Samples"
-    case music = "Music"
-    case audio = "Audio"
-    case skins = "Skins"
-    case animations = "Animations"
-    case voices = "Voices"
+/// Category filter for mod browsing
+/// Uses "All" plus dynamically detected categories from cached mods
+struct ModCategoryFilter: Hashable, Identifiable {
+    let name: String
+    let count: Int
 
-    var displayName: String { rawValue }
+    var id: String { name }
+
+    var displayName: String {
+        if name == "All" {
+            return "All Categories"
+        }
+        return "\(name) (\(count))"
+    }
+
+    static let all = ModCategoryFilter(name: "All", count: 0)
+
+    /// Build category filters from a list of mods
+    static func fromMods(_ mods: [GameBananaMod]) -> [ModCategoryFilter] {
+        // Count mods per category
+        var categoryCounts: [String: Int] = [:]
+        for mod in mods {
+            let category = mod.category
+            categoryCounts[category, default: 0] += 1
+        }
+
+        // Sort by count (descending), then alphabetically
+        let sorted = categoryCounts.sorted { lhs, rhs in
+            if lhs.value != rhs.value {
+                return lhs.value > rhs.value
+            }
+            return lhs.key < rhs.key
+        }
+
+        // Build filter list with "All" first
+        var filters = [ModCategoryFilter.all]
+        filters.append(contentsOf: sorted.map { ModCategoryFilter(name: $0.key, count: $0.value) })
+
+        return filters
+    }
 }
 
 /// Sort options for mod browsing
 enum ModSortOption: String, CaseIterable {
     case newest = "new"
     case updated = "updated"
+    case popular = "popular"
+    case mostLiked = "liked"
 
     var displayName: String {
         switch self {
         case .newest: return "Newest"
-        case .updated: return "Recently Updated"
+        case .updated: return "Updated"
+        case .popular: return "Most Views"
+        case .mostLiked: return "Most Liked"
         }
     }
 }

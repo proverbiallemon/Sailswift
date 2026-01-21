@@ -42,11 +42,27 @@ struct AboutView: View {
                 Text("Built with SwiftUI").font(.caption).foregroundColor(.secondary)
             }
 
-            Spacer()
+            Divider().padding(.horizontal, 40)
 
-            Button("Close") { dismiss() }.keyboardShortcut(.defaultAction)
+            VStack(spacing: 8) {
+                Text("Acknowledgments").font(.caption).fontWeight(.semibold)
+                VStack(spacing: 4) {
+                    Link("Sparkle - Auto-update framework", destination: URL(string: "https://sparkle-project.org")!)
+                        .font(.caption2)
+                    Link("Marquee - Scrolling text component", destination: URL(string: "https://github.com/SwiftUIKit/Marquee")!)
+                        .font(.caption2)
+                    Link("Pow - Animation effects library", destination: URL(string: "https://github.com/EmergeTools/Pow")!)
+                        .font(.caption2)
+                }
+                .foregroundColor(.secondary)
+            }
+
+            Button("Close") { dismiss() }
+                .keyboardShortcut(.defaultAction)
+                .padding(.top, 10)
         }
         .padding(30)
-        .frame(width: 400, height: 500)
+        .frame(width: 400)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
