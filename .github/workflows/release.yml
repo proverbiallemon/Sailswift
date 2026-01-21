@@ -119,34 +119,30 @@ jobs:
             RELEASE_NOTES="<p>See <a href=\"https://github.com/proverbiallemon/Sailswift/releases/tag/v${VERSION}\">release notes on GitHub</a> for details.</p>"
           fi
 
-          # Create updated appcast with new item
-          # sparkle:version uses build number for reliable comparison
-          # sparkle:shortVersionString is the display version
-          cat > appcast.xml << EOF
-<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
-    <channel>
-        <title>Sailswift Updates</title>
-        <link>https://github.com/proverbiallemon/Sailswift</link>
-        <description>Sailswift update feed</description>
-        <language>en</language>
-        <item>
-            <title>Version ${VERSION}</title>
-            <pubDate>${DATE}</pubDate>
-            <sparkle:version>${BUILD_NUMBER}</sparkle:version>
-            <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[
-${RELEASE_NOTES}
-            ]]></description>
-            <enclosure url="${DOWNLOAD_URL}"
-                       sparkle:edSignature="${SIGNATURE}"
-                       length="${FILE_SIZE}"
-                       type="application/octet-stream" />
-        </item>
-    </channel>
-</rss>
-EOF
+          # Create appcast using printf to avoid YAML/heredoc issues
+          printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' > appcast.xml
+          printf '%s\n' '<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">' >> appcast.xml
+          printf '%s\n' '    <channel>' >> appcast.xml
+          printf '%s\n' '        <title>Sailswift Updates</title>' >> appcast.xml
+          printf '%s\n' '        <link>https://github.com/proverbiallemon/Sailswift</link>' >> appcast.xml
+          printf '%s\n' '        <description>Sailswift update feed</description>' >> appcast.xml
+          printf '%s\n' '        <language>en</language>' >> appcast.xml
+          printf '%s\n' '        <item>' >> appcast.xml
+          printf '%s\n' "            <title>Version ${VERSION}</title>" >> appcast.xml
+          printf '%s\n' "            <pubDate>${DATE}</pubDate>" >> appcast.xml
+          printf '%s\n' "            <sparkle:version>${BUILD_NUMBER}</sparkle:version>" >> appcast.xml
+          printf '%s\n' "            <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>" >> appcast.xml
+          printf '%s\n' '            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>' >> appcast.xml
+          printf '%s\n' '            <description><![CDATA[' >> appcast.xml
+          printf '%s\n' "${RELEASE_NOTES}" >> appcast.xml
+          printf '%s\n' '            ]]></description>' >> appcast.xml
+          printf '%s\n' "            <enclosure url=\"${DOWNLOAD_URL}\"" >> appcast.xml
+          printf '%s\n' "                       sparkle:edSignature=\"${SIGNATURE}\"" >> appcast.xml
+          printf '%s\n' "                       length=\"${FILE_SIZE}\"" >> appcast.xml
+          printf '%s\n' '                       type="application/octet-stream" />' >> appcast.xml
+          printf '%s\n' '        </item>' >> appcast.xml
+          printf '%s\n' '    </channel>' >> appcast.xml
+          printf '%s\n' '</rss>' >> appcast.xml
 
           echo "Updated appcast.xml:"
           cat appcast.xml
