@@ -112,31 +112,41 @@ jobs:
           DATE=$(date -R)
           DOWNLOAD_URL="https://github.com/proverbiallemon/Sailswift/releases/download/v${VERSION}/Sailswift-${VERSION}.zip"
 
+          # Read release notes from file if it exists, otherwise use default
+          if [ -f "RELEASE_NOTES.html" ]; then
+            RELEASE_NOTES=$(cat RELEASE_NOTES.html)
+          else
+            RELEASE_NOTES="<p>See <a href=\"https://github.com/proverbiallemon/Sailswift/releases/tag/v${VERSION}\">release notes on GitHub</a> for details.</p>"
+          fi
+
           # Create updated appcast with new item
           # sparkle:version uses build number for reliable comparison
           # sparkle:shortVersionString is the display version
           cat > appcast.xml << EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
-              <channel>
-                  <title>Sailswift Updates</title>
-                  <link>https://github.com/proverbiallemon/Sailswift</link>
-                  <description>Sailswift update feed</description>
-                  <language>en</language>
-                  <item>
-                      <title>Version ${VERSION}</title>
-                      <pubDate>${DATE}</pubDate>
-                      <sparkle:version>${BUILD_NUMBER}</sparkle:version>
-                      <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
-                      <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-                      <enclosure url="${DOWNLOAD_URL}"
-                                 sparkle:edSignature="${SIGNATURE}"
-                                 length="${FILE_SIZE}"
-                                 type="application/octet-stream" />
-                  </item>
-              </channel>
-          </rss>
-          EOF
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+    <channel>
+        <title>Sailswift Updates</title>
+        <link>https://github.com/proverbiallemon/Sailswift</link>
+        <description>Sailswift update feed</description>
+        <language>en</language>
+        <item>
+            <title>Version ${VERSION}</title>
+            <pubDate>${DATE}</pubDate>
+            <sparkle:version>${BUILD_NUMBER}</sparkle:version>
+            <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+${RELEASE_NOTES}
+            ]]></description>
+            <enclosure url="${DOWNLOAD_URL}"
+                       sparkle:edSignature="${SIGNATURE}"
+                       length="${FILE_SIZE}"
+                       type="application/octet-stream" />
+        </item>
+    </channel>
+</rss>
+EOF
 
           echo "Updated appcast.xml:"
           cat appcast.xml
