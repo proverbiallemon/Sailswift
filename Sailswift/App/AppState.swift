@@ -148,6 +148,16 @@ class AppState: ObservableObject {
 
     // Multi-selection
     @Published var selectedFolders: Set<String> = []  // Folder paths selected for batch operations
+    @Published var multiSelectModeEnabled: Bool = false  // User-toggled multi-select mode
+
+    /// True when in multi-select mode (either user-toggled or has selections from Cmd+click)
+    var isInMultiSelectMode: Bool {
+        multiSelectModeEnabled || !selectedFolders.isEmpty
+    }
+
+    // Modpack to profile conversion
+    @Published var pendingModpackProfile: Modpack?  // Modpack awaiting profile creation
+    @Published var showModpackProfilePopover = false
 
     // MARK: - Settings
 
@@ -255,6 +265,29 @@ class AppState: ObservableObject {
 
         do {
             mods = try await modManager.loadMods(from: modsDirectory, loadOrder: modLoadOrder)
+
+            // Ensure all enabled mods are in the load order
+            var loadOrderChanged = false
+            for mod in mods where mod.isEnabled {
+                if !modLoadOrder.contains(mod.name) {
+                    modLoadOrder.append(mod.name)
+                    loadOrderChanged = true
+                }
+            }
+
+            // Also remove any mods from load order that no longer exist or are disabled
+            let enabledModNames = Set(mods.filter { $0.isEnabled }.map { $0.name })
+            let beforeCount = modLoadOrder.count
+            modLoadOrder.removeAll { !enabledModNames.contains($0) }
+            if modLoadOrder.count != beforeCount {
+                loadOrderChanged = true
+            }
+
+            // Sync to config if we made changes
+            if loadOrderChanged {
+                syncLoadOrderToConfig()
+            }
+
             statusMessage = "Loaded \(mods.count) mods"
         } catch {
             statusMessage = "Error loading mods: \(error.localizedDescription)"
@@ -446,6 +479,24 @@ class AppState: ObservableObject {
         selectedFolders.removeAll()
     }
 
+    /// Toggle multi-select mode on/off
+    func toggleMultiSelectMode() {
+        if multiSelectModeEnabled {
+            // Turning off - clear selections
+            multiSelectModeEnabled = false
+            selectedFolders.removeAll()
+        } else {
+            // Turning on
+            multiSelectModeEnabled = true
+        }
+    }
+
+    /// Exit multi-select mode (called after operations like delete)
+    func exitMultiSelectMode() {
+        multiSelectModeEnabled = false
+        selectedFolders.removeAll()
+    }
+
     /// Check if a folder is selected
     func isFolderSelected(_ folderPath: String) -> Bool {
         selectedFolders.contains(folderPath)
@@ -506,9 +557,9 @@ class AppState: ObservableObject {
         syncLoadOrderToConfig()
         await loadMods()
 
-        // Clear state
+        // Clear state and exit multi-select mode
         pendingDeletion = nil
-        selectedFolders.removeAll()
+        exitMultiSelectMode()
         showDeleteConfirmPopover = false
 
         // Notify via ticker
@@ -521,7 +572,7 @@ class AppState: ObservableObject {
     /// Cancel the pending deletion
     func cancelPendingDeletion() {
         pendingDeletion = nil
-        selectedFolders.removeAll()
+        exitMultiSelectMode()
         showDeleteConfirmPopover = false
     }
 
@@ -1073,9 +1124,48 @@ class AppState: ObservableObject {
             syncLoadOrderToConfig()
 
             await loadMods()
+
+            // Apply individual mod states from modpack (if available)
+            if let modStates = modpack.modStates {
+                for mod in mods {
+                    if let shouldBeEnabled = modStates[mod.stableId], shouldBeEnabled != mod.isEnabled {
+                        await toggleMod(mod)
+                    }
+                }
+            }
+
             statusMessage = "Imported '\(modpack.name)': \(result.installed) installed, \(result.skipped) skipped, \(result.failed) failed"
+
+            // Store modpack for potential profile creation and notify user
+            pendingModpackProfile = modpack
+            addNotification("Modpack '\(modpack.name)' imported. Click here to save as profile.", type: .success)
         } catch {
             statusMessage = "Error importing modpack: \(error.localizedDescription)"
         }
+    }
+
+    // MARK: - Modpack to Profile Conversion
+
+    /// Create a profile from the pending imported modpack
+    func createProfileFromModpack() {
+        guard let modpack = pendingModpackProfile else { return }
+
+        // Create profile from current mod state (which now includes the imported mods)
+        profileManager.saveCurrentState(
+            name: modpack.name,
+            mods: mods,
+            loadOrder: modLoadOrder,
+            modsDirectory: modsDirectory
+        )
+
+        addNotification("Profile '\(modpack.name)' created from modpack", type: .success)
+        pendingModpackProfile = nil
+        showModpackProfilePopover = false
+    }
+
+    /// Dismiss the modpack profile prompt without creating a profile
+    func dismissModpackProfilePrompt() {
+        pendingModpackProfile = nil
+        showModpackProfilePopover = false
     }
 }

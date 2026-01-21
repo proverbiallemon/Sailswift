@@ -3,6 +3,7 @@ import Pow
 
 /// View for a single mod row in the tree
 struct ModRowView: View {
+    @EnvironmentObject var appState: AppState
     let mod: Mod
     let onToggle: () -> Void
     var loadOrderIndex: Int? = nil
@@ -17,14 +18,15 @@ struct ModRowView: View {
                     .frame(width: 20, alignment: .trailing)
             }
 
-            // Clickable toggle button
+            // Clickable toggle button (disabled in multi-select mode)
             Button(action: onToggle) {
                 Image(systemName: mod.isEnabled ? "checkmark.circle.fill" : "xmark.circle.fill")
-                    .foregroundColor(mod.isEnabled ? .green : .red)
+                    .foregroundColor(appState.isInMultiSelectMode ? .secondary : (mod.isEnabled ? .green : .red))
                     .font(.system(size: 14))
             }
             .buttonStyle(.plain)
-            .help(mod.isEnabled ? "Disable mod" : "Enable mod")
+            .disabled(appState.isInMultiSelectMode)
+            .help(appState.isInMultiSelectMode ? "Exit multi-select mode to toggle" : (mod.isEnabled ? "Disable mod" : "Enable mod"))
 
             Image(systemName: "doc.fill")
                 .foregroundColor(.secondary)
@@ -119,21 +121,27 @@ struct FolderRowView: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            // Selection checkbox (visible when there are selections or pending deletion)
-            if !appState.selectedFolders.isEmpty || appState.pendingDeletion != nil {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundColor(isSelected ? .blue : .secondary.opacity(0.5))
-                    .font(.system(size: 12))
+            // Selection checkbox (visible in multi-select mode or when pending deletion)
+            if appState.isInMultiSelectMode || appState.pendingDeletion != nil {
+                Button {
+                    appState.toggleFolderSelection(folder.relativePath)
+                } label: {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .foregroundColor(isSelected ? .blue : .secondary.opacity(0.5))
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.plain)
             }
 
-            // Clickable toggle button
+            // Clickable toggle button (disabled in multi-select mode)
             Button(action: onToggle) {
                 Image(systemName: folder.state.iconName)
-                    .foregroundColor(colorForState(folder.state))
+                    .foregroundColor(appState.isInMultiSelectMode ? .secondary : colorForState(folder.state))
                     .font(.system(size: 14))
             }
             .buttonStyle(.plain)
-            .help("Toggle all mods in folder")
+            .disabled(appState.isInMultiSelectMode)
+            .help(appState.isInMultiSelectMode ? "Exit multi-select mode to toggle" : "Toggle all mods in folder")
 
             ZStack(alignment: .topTrailing) {
                 Image(systemName: "folder.fill")
@@ -173,12 +181,9 @@ struct FolderRowView: View {
         }
         .opacity(isPendingDeletion ? 0.5 : 1.0)
         .contentShape(Rectangle())
-        .onTapGesture {
-            // Normal click - handled by List selection
-        }
         .simultaneousGesture(
             TapGesture().modifiers(.command).onEnded {
-                // Command+click - toggle selection
+                // Command+click - toggle selection (also enters multi-select implicitly)
                 appState.toggleFolderSelection(folder.relativePath)
             }
         )

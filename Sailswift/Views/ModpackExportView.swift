@@ -36,21 +36,25 @@ struct ModpackExportView: View {
 
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
+                        // Count unique folders (what actually gets exported)
+                        let folderCount = countUniqueFolders()
+                        let foldersWithIds = countFoldersWithGameBananaIds()
+
                         HStack {
-                            Text("Mods to include:")
+                            Text("Mod folders to include:")
                                 .font(.headline)
                             Spacer()
-                            Text("\(appState.mods.count) mods")
+                            Text("\(folderCount)")
                                 .foregroundColor(.secondary)
                         }
 
-                        // Count mods with GameBanana IDs
-                        let modsWithIds = countModsWithGameBananaIds()
-                        if modsWithIds < appState.mods.count {
+                        // Warning for folders without GameBanana IDs
+                        let foldersWithoutIds = folderCount - foldersWithIds
+                        if foldersWithoutIds > 0 {
                             HStack {
                                 Image(systemName: "exclamationmark.triangle.fill")
                                     .foregroundColor(.orange)
-                                Text("\(appState.mods.count - modsWithIds) mods without GameBanana IDs won't be downloadable by others")
+                                Text("\(foldersWithoutIds) folder\(foldersWithoutIds == 1 ? "" : "s") without GameBanana IDs won't be downloadable by others")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
@@ -108,7 +112,18 @@ struct ModpackExportView: View {
         )
     }
 
-    private func countModsWithGameBananaIds() -> Int {
+    /// Count unique top-level folders (what actually gets exported in a modpack)
+    private func countUniqueFolders() -> Int {
+        var seenFolders = Set<String>()
+        for mod in appState.mods {
+            let folderName = mod.folderPath.isEmpty ? mod.name : mod.folderPath.components(separatedBy: "/").first ?? mod.name
+            seenFolders.insert(folderName)
+        }
+        return seenFolders.count
+    }
+
+    /// Count folders that have GameBanana metadata (can be auto-downloaded)
+    private func countFoldersWithGameBananaIds() -> Int {
         var count = 0
         var seenFolders = Set<String>()
 

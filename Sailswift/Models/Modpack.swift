@@ -9,6 +9,10 @@ struct Modpack: Codable {
     let mods: [ModpackEntry]
     let loadOrder: [String]
 
+    /// Per-file enabled states (stableId -> isEnabled) for files within folders
+    /// This preserves individual file states when a folder has multiple mod files
+    var modStates: [String: Bool]?
+
     /// File extension for modpack files
     static let fileExtension = "sailswiftpack"
 
@@ -44,7 +48,7 @@ struct Modpack: Codable {
             )
         }
 
-        // Deduplicate entries by folder name
+        // Deduplicate entries by folder name (for download purposes)
         var seenFolders = Set<String>()
         let uniqueEntries = entries.filter { entry in
             if seenFolders.contains(entry.folderName) {
@@ -54,13 +58,20 @@ struct Modpack: Codable {
             return true
         }
 
+        // Store individual mod file states (stableId -> isEnabled)
+        var modStates: [String: Bool] = [:]
+        for mod in mods {
+            modStates[mod.stableId] = mod.isEnabled
+        }
+
         return Modpack(
             name: name,
             author: author,
             description: description,
             createdAt: Date(),
             mods: uniqueEntries,
-            loadOrder: loadOrder
+            loadOrder: loadOrder,
+            modStates: modStates
         )
     }
 }

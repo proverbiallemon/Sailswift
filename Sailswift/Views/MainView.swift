@@ -9,7 +9,6 @@ enum DetailViewMode: String, CaseIterable {
 struct MainView: View {
     @EnvironmentObject var appState: AppState
     @State private var selectedNode: ModTreeNode?
-    @State private var showDeleteConfirmation = false
     @State private var detailMode: DetailViewMode = .mods
     @State private var searchText = ""
     @State private var showModpackExport = false
@@ -62,28 +61,6 @@ struct MainView: View {
             }
 
             ToolbarItemGroup(placement: .secondaryAction) {
-                Button(action: toggleSelected) {
-                    Label("Toggle", systemImage: "power")
-                }
-                .disabled(selectedNode == nil)
-
-                Button(action: { showDeleteConfirmation = true }) {
-                    Label("Delete", systemImage: "trash")
-                }
-                .disabled(selectedNode == nil)
-
-                Divider()
-
-                Button(action: { FileService.shared.openInFinder(appState.modsDirectory) }) {
-                    Label("Open Mods Folder", systemImage: "folder")
-                }
-
-                Button(action: { Task { await appState.loadMods() } }) {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                }
-
-                Divider()
-
                 Button(action: { Task { await appState.checkForModUpdates() } }) {
                     Label(
                         appState.modUpdateChecker.isChecking ? "Checking..." : "Check for Mod Updates",
@@ -106,12 +83,6 @@ struct MainView: View {
         .searchable(text: $searchText, prompt: "Search mods")
         .navigationTitle("Sailswift")
         .navigationSubtitle(appState.statusMessage)
-        .alert("Delete", isPresented: $showDeleteConfirmation) {
-            Button("Cancel", role: .cancel) { }
-            Button("Delete", role: .destructive) { deleteSelected() }
-        } message: {
-            Text("Are you sure you want to delete this item?")
-        }
         .sheet(isPresented: $appState.showAbout) {
             AboutView()
         }
@@ -186,27 +157,6 @@ struct MainView: View {
             return "arrow.up.circle.fill"
         }
         return "arrow.up.circle"
-    }
-
-    private func toggleSelected() {
-        guard let node = selectedNode else { return }
-        Task {
-            switch node {
-            case .mod(let mod): await appState.toggleMod(mod)
-            case .folder(let folder, _): await appState.toggleFolder(folder.path)
-            }
-        }
-    }
-
-    private func deleteSelected() {
-        guard let node = selectedNode else { return }
-        Task {
-            switch node {
-            case .mod(let mod): await appState.deleteMod(mod)
-            case .folder(let folder, _): await appState.deleteFolder(folder.path)
-            }
-            selectedNode = nil
-        }
     }
 }
 

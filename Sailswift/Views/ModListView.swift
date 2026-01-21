@@ -192,6 +192,49 @@ struct NotificationLogPopover: View {
 
             Divider()
 
+            // Modpack to Profile prompt (if pending)
+            if let modpack = appState.pendingModpackProfile {
+                VStack(spacing: 8) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "person.crop.circle.badge.plus")
+                            .foregroundColor(.purple)
+                            .font(.title2)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Save as Profile?")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            Text("Create a profile from '\(modpack.name)'")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    HStack(spacing: 12) {
+                        Button("No Thanks") {
+                            appState.dismissModpackProfilePrompt()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+
+                        Button("Create Profile") {
+                            appState.createProfileFromModpack()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                    }
+                }
+                .padding(12)
+                .background(Color.purple.opacity(0.1))
+                .cornerRadius(8)
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+
+                Divider()
+                    .padding(.top, 8)
+            }
+
             // Messages list
             if appState.notifications.isEmpty {
                 Text("No notifications")
@@ -318,6 +361,9 @@ struct ModListView: View {
             }
             .listStyle(.sidebar)
 
+            // Action bar for quick mod operations
+            modActionBar
+
             // Profiles section
             Divider()
             profilesSection
@@ -349,6 +395,95 @@ struct ModListView: View {
             }
         } message: {
             Text("Enter a name for this profile")
+        }
+    }
+
+    /// Bottom action bar for quick mod operations
+    @ViewBuilder
+    private var modActionBar: some View {
+        HStack(spacing: 12) {
+            // Multi-select mode toggle
+            Button {
+                appState.toggleMultiSelectMode()
+            } label: {
+                Image(systemName: appState.isInMultiSelectMode ? "checkmark.circle.fill" : "checkmark.circle")
+            }
+            .buttonStyle(.borderless)
+            .foregroundColor(appState.isInMultiSelectMode ? .blue : .secondary)
+            .help(appState.isInMultiSelectMode ? "Exit multi-select mode" : "Enter multi-select mode")
+
+            // Toggle button (disabled during multi-select)
+            Button {
+                if let node = selectedNode {
+                    toggleNode(node)
+                }
+            } label: {
+                Image(systemName: "power")
+            }
+            .buttonStyle(.borderless)
+            .disabled(selectedNode == nil || appState.isInMultiSelectMode)
+            .help("Toggle selected mod/folder")
+
+            // Delete button
+            Button {
+                deleteSelectedItem()
+            } label: {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
+            .disabled(selectedNode == nil && appState.selectedFolders.isEmpty)
+            .help("Delete selected")
+
+            Spacer()
+
+            // Selection count (when in multi-select mode)
+            if appState.isInMultiSelectMode && !appState.selectedFolders.isEmpty {
+                Text("\(appState.selectedFolders.count) selected")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            // Open mods folder button
+            Button {
+                FileService.shared.openInFinder(appState.modsDirectory)
+            } label: {
+                Image(systemName: "folder")
+            }
+            .buttonStyle(.borderless)
+            .help("Open mods folder")
+
+            // Refresh button
+            Button {
+                Task { await appState.loadMods() }
+            } label: {
+                Image(systemName: "arrow.clockwise")
+            }
+            .buttonStyle(.borderless)
+            .help("Refresh mod list")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+    }
+
+    /// Delete the currently selected item (node or multi-selected folders)
+    private func deleteSelectedItem() {
+        // If there are multi-selected folders, use batch delete
+        if !appState.selectedFolders.isEmpty {
+            appState.requestDeleteSelectedFolders()
+            return
+        }
+
+        // Otherwise delete the single selected node
+        guard let node = selectedNode else { return }
+        Task {
+            switch node {
+            case .mod(let mod):
+                await appState.deleteMod(mod)
+            case .folder(let folder, _):
+                await appState.deleteFolder(folder.path)
+            }
+            selectedNode = nil
         }
     }
 
