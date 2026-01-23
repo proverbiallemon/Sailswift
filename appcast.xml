@@ -6,10 +6,10 @@
         <description>Sailswift update feed</description>
         <language>en</language>
         <item>
-            <title>Version 1.1.2</title>
-            <pubDate>Wed, 21 Jan 2026 18:52:19 +0000</pubDate>
-            <sparkle:version>24</sparkle:version>
-            <sparkle:shortVersionString>1.1.2</sparkle:shortVersionString>
+            <title>Version 1.1.3</title>
+            <pubDate>Fri, 23 Jan 2026 05:16:21 +0000</pubDate>
+            <sparkle:version>25</sparkle:version>
+            <sparkle:shortVersionString>1.1.3</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
             <description><![CDATA[
 <h2>What's New in v1.1.2</h2>
@@ -35,9 +35,9 @@
     <li>Toggle, Delete, Refresh, and Open Folder buttons moved from toolbar to action bar</li>
 </ul>
             ]]></description>
-            <enclosure url="https://github.com/proverbiallemon/Sailswift/releases/download/v1.1.2/Sailswift-1.1.2.zip"
-                       sparkle:edSignature="JsP8OUu1U2Fxot0niT+NA10sxoIS964AWykK1ATf73lHlzSaZMQLrFGqhsnIhK01AOLTmPtZGv2uuexT7ra6Cw=="
-                       length="3508728"
+            <enclosure url="https://github.com/proverbiallemon/Sailswift/releases/download/v1.1.3/Sailswift-1.1.3.zip"
+                       sparkle:edSignature="sHUtZBDsLcLW0mZXD/HT6h0svkSViTakuCJ63mSS2GMEx1UAQxpo7eM1S7qBy5IS0nPI+4rsFXAEHpFviwmVCw=="
+                       length="3478371"
                        type="application/octet-stream" />
         </item>
     </channel>
