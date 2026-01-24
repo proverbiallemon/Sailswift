@@ -6,6 +6,8 @@
 
 Native macOS mod manager for **Ship of Harkinian** - built with Swift and SwiftUI.
 
+**[sailswift.app](https://sailswift.app)** · **[GameBanana](https://gamebanana.com/tools/21731)** · **[Wiki](https://github.com/proverbiallemon/Sailswift/wiki)**
+
 > **Built on the logic of [Saildeck-macOS](https://github.com/proverbiallemon/Saildeck-macOS)** (itself a fork of the original [Saildeck](https://github.com/Wolfeni/Saildeck) by Wolfeni) - rewritten from Python/tkinter to native Swift for optimal Mac performance.
 
 ## Features
@@ -27,7 +29,11 @@ Native macOS mod manager for **Ship of Harkinian** - built with Swift and SwiftU
 
 ## Installation
 
-Download the latest release from the [Releases](https://github.com/proverbiallemon/Sailswift/releases) page.
+Download the latest release from the [Releases](https://github.com/proverbiallemon/Sailswift/releases) page, or install via Homebrew:
+
+```bash
+brew tap PocketBearDev/sailswift && brew install --cask sailswift
+```
 
 **[Detailed installation guide →](https://github.com/proverbiallemon/Sailswift/wiki/Installation)**
 
