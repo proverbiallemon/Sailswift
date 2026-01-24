@@ -53,6 +53,10 @@ struct AboutView: View {
                         .font(.caption2)
                     Link("Pow - Animation effects library", destination: URL(string: "https://github.com/EmergeTools/Pow")!)
                         .font(.caption2)
+                    Link("HackerNoon Pixel Icon Library - CC 4.0", destination: URL(string: "https://pixeliconlibrary.com")!)
+                        .font(.caption2)
+                    Link("Press Start 2P - Pixel font (OFL)", destination: URL(string: "https://fonts.google.com/specimen/Press+Start+2P")!)
+                        .font(.caption2)
                 }
                 .foregroundColor(.secondary)
             }

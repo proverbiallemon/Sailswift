@@ -162,25 +162,41 @@ struct FolderRowView: View {
                 .truncationMode(.middle)
                 .foregroundColor(isPendingDeletion ? .secondary : .primary)
 
-            // Update indicator text with shine effect
+            // Update indicator button with shine effect
             if hasUpdate && !isPendingDeletion {
-                Text("Update")
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 1)
-                    .background(Capsule().fill(.orange))
-                    .changeEffect(.shine, value: shineToggle)
-                    .onAppear {
-                        // Start repeating shine animation
-                        startShineTimer()
-                    }
+                Button {
+                    Task { await appState.updateMod(folderPath: folder.relativePath) }
+                } label: {
+                    Text("Update")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(.orange))
+                        .changeEffect(.shine, value: shineToggle)
+                }
+                .buttonStyle(.plain)
+                .help("Click to update this mod")
+                .onAppear {
+                    // Start repeating shine animation
+                    startShineTimer()
+                }
             }
 
             Spacer()
         }
         .opacity(isPendingDeletion ? 0.5 : 1.0)
         .contentShape(Rectangle())
+        .contextMenu {
+            if hasUpdate {
+                Button("Update Mod") {
+                    Task { await appState.updateMod(folderPath: folder.relativePath) }
+                }
+            }
+            Button("Show in Finder") {
+                FileService.shared.openInFinder(folder.path)
+            }
+        }
         .simultaneousGesture(
             TapGesture().modifiers(.command).onEnded {
                 // Command+click - toggle selection (also enters multi-select implicitly)

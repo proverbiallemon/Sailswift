@@ -31,6 +31,7 @@
 		1000000000000050 /* PathConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000050 /* PathConstants.swift */; };
 		1000000000000051 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000051 /* Extensions.swift */; };
 		1000000000000070 /* gamebanana-icon.png in Resources */ = {isa = PBXBuildFile; fileRef = 2000000000000070 /* gamebanana-icon.png */; };
+		1000000000000071 /* PressStart2P-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 2000000000000071 /* PressStart2P-Regular.ttf */; };
 		1000000000000080 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2000000000000080 /* Assets.xcassets */; };
 		6CDA87B32F1E233C00739D35 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 6CDA87B22F1E233C00739D35 /* Sparkle */; };
 		6CDA87B52F1E24FE00739D35 /* UpdaterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CDA87B42F1E24FE00739D35 /* UpdaterService.swift */; };
@@ -66,6 +67,7 @@
 		2000000000000060 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2000000000000061 /* Sailswift.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Sailswift.entitlements; sourceTree = "<group>"; };
 		2000000000000070 /* gamebanana-icon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "gamebanana-icon.png"; sourceTree = "<group>"; };
+		2000000000000071 /* PressStart2P-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "PressStart2P-Regular.ttf"; sourceTree = "<group>"; };
 		2000000000000080 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		3000000000000000 /* Sailswift.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Sailswift.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6CDA87B42F1E24FE00739D35 /* UpdaterService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdaterService.swift; sourceTree = "<group>"; };
@@ -182,6 +184,7 @@
 			isa = PBXGroup;
 			children = (
 				2000000000000070 /* gamebanana-icon.png */,
+				2000000000000071 /* PressStart2P-Regular.ttf */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -259,6 +262,7 @@
 			files = (
 				1000000000000080 /* Assets.xcassets in Resources */,
 				1000000000000070 /* gamebanana-icon.png in Resources */,
+				1000000000000071 /* PressStart2P-Regular.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -99,6 +99,21 @@ extension Color {
     static let modEnabled = Color.green
     static let modDisabled = Color.red
     static let modMixed = Color.orange
+
+    // Retro branding palette (matches website)
+    static let retroRed = Color(red: 224/255, green: 64/255, blue: 64/255)
+    static let retroOrange = Color(red: 255/255, green: 140/255, blue: 0/255)
+    static let retroBlue = Color(red: 0/255, green: 102/255, blue: 204/255)
+    static let retroBlueDark = Color(red: 0/255, green: 51/255, blue: 102/255)
+}
+
+// MARK: - Pixel Font
+
+extension Font {
+    /// Press Start 2P pixel font for retro branding accents
+    static func pixel(size: CGFloat) -> Font {
+        .custom("PressStart2P-Regular", size: size)
+    }
 }
 
 // MARK: - View Extensions

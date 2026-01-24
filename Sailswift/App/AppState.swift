@@ -796,6 +796,34 @@ class AppState: ObservableObject {
         modUpdateChecker.updates.count
     }
 
+    /// Update a mod folder to its latest version from GameBanana
+    func updateMod(folderPath: String) async {
+        guard let updateInfo = modUpdateChecker.updateInfo(for: folderPath) else { return }
+
+        let fullPath = modsDirectory.appendingPathComponent(folderPath)
+
+        do {
+            let files = try await GameBananaAPI.shared.fetchModFiles(modId: updateInfo.gameBananaModId)
+            guard let file = files.first else {
+                addNotification("No files available for \(updateInfo.modName)", type: .error)
+                return
+            }
+
+            await downloadManager.downloadFile(
+                file,
+                modName: updateInfo.modName,
+                modId: updateInfo.gameBananaModId,
+                targetFolder: fullPath
+            )
+
+            modUpdateChecker.clearUpdate(for: folderPath)
+            addNotification("Updated \(updateInfo.modName)", type: .success)
+            await loadMods()
+        } catch {
+            addNotification("Update failed: \(error.localizedDescription)", type: .error)
+        }
+    }
+
     // MARK: - Profile Management
 
     /// Save current mod state as a new profile

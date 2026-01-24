@@ -109,7 +109,7 @@ class DownloadManager: ObservableObject {
     }
 
     /// Download a file from GameBanana using fast URLSessionDownloadTask
-    func downloadFile(_ file: GameBananaFile, modName: String, modId: Int? = nil, isProfileDownload: Bool = false) async {
+    func downloadFile(_ file: GameBananaFile, modName: String, modId: Int? = nil, isProfileDownload: Bool = false, targetFolder: URL? = nil) async {
         var download = Download(filename: file.filename, modName: modName, fileId: file.fileId, modId: modId, isProfileDownload: isProfileDownload)
         download.status = .downloading
         download.statusMessage = "Starting download..."
@@ -140,15 +140,16 @@ class DownloadManager: ObservableObject {
             updateDownloadStatus(fileId: file.fileId, status: .extracting, message: "Extracting files...")
 
             // Handle the downloaded file
-            let installedCount = try await handleDownloadedFile(tempFile, modName: modName, modId: modId)
+            let installedCount = try await handleDownloadedFile(tempFile, modName: modName, modId: modId, targetFolder: targetFolder)
 
             // Clean up temp directory (parent of tempFile)
             try? FileManager.default.removeItem(at: tempFile.deletingLastPathComponent())
 
             if installedCount > 0 {
+                let displayFolder = targetFolder?.lastPathComponent ?? sanitizeFolderName(modName)
                 let message = installedCount == 1
-                    ? "Installed to \(sanitizeFolderName(modName))/"
-                    : "Installed \(installedCount) files to \(sanitizeFolderName(modName))/"
+                    ? "Installed to \(displayFolder)/"
+                    : "Installed \(installedCount) files to \(displayFolder)/"
                 updateDownloadStatus(fileId: file.fileId, status: .completed, message: message)
                 showResult(success: true, message: message, isProfileDownload: isProfileDownload)
             } else {
@@ -171,10 +172,31 @@ class DownloadManager: ObservableObject {
         // The user will dismiss the popover which clears it via AppState.cancelImport()
     }
 
-    private func handleDownloadedFile(_ tempURL: URL, modName: String, modId: Int?) async throws -> Int {
+    private func handleDownloadedFile(_ tempURL: URL, modName: String, modId: Int?, targetFolder: URL? = nil) async throws -> Int {
         let lowercasedFilename = tempURL.lastPathComponent.lowercased()
-        let folderName = sanitizeFolderName(modName)
-        let modFolder = PathConstants.modsDirectory.appendingPathComponent(folderName)
+        let modFolder: URL
+
+        if let target = targetFolder {
+            // Updating an existing mod folder - remove old mod files first
+            modFolder = target
+            if FileManager.default.fileExists(atPath: target.path) {
+                let contents = try FileManager.default.contentsOfDirectory(at: target, includingPropertiesForKeys: nil)
+                for file in contents where ModFileExtension.allExtensions.contains(file.pathExtension.lowercased()) {
+                    try FileManager.default.removeItem(at: file)
+                }
+            }
+        } else {
+            let folderName = sanitizeFolderName(modName)
+            modFolder = PathConstants.modsDirectory.appendingPathComponent(folderName)
+
+            // If folder already exists, remove old mod files to avoid duplicates
+            if FileManager.default.fileExists(atPath: modFolder.path) {
+                let contents = try FileManager.default.contentsOfDirectory(at: modFolder, includingPropertiesForKeys: nil)
+                for file in contents where ModFileExtension.allExtensions.contains(file.pathExtension.lowercased()) {
+                    try FileManager.default.removeItem(at: file)
+                }
+            }
+        }
 
         // If it's directly a mod file, move it to a subfolder
         if lowercasedFilename.hasSuffix(".otr") || lowercasedFilename.hasSuffix(".o2r") {
@@ -599,10 +621,12 @@ class DownloadManager: ObservableObject {
         // Create a dedicated delegate instance for this download
         let delegate = DownloadDelegate()
 
-        // Create session with delegate
+        // Create session with delegate - use browser User-Agent to avoid CDN throttling
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForResource = 300 // 5 minutes
-        config.httpAdditionalHeaders = ["User-Agent": "Sailswift/1.0"]
+        config.httpAdditionalHeaders = [
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+        ]
         let session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
 
         // Use withCheckedThrowingContinuation to bridge delegate callbacks to async/await

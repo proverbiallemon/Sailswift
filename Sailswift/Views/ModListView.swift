@@ -2,6 +2,116 @@ import SwiftUI
 import Marquee
 import Pow
 
+/// Pixel art boat matching the website icon, rendered as a 32x32 bitmap with crisp scaling
+struct PixelBoatView: View {
+    private static let boatImage: NSImage = {
+        let size = 32
+        let image = NSImage(size: NSSize(width: size, height: size))
+        image.lockFocus()
+
+        let ctx = NSGraphicsContext.current!.cgContext
+        ctx.interpolationQuality = .none
+        ctx.setShouldAntialias(false)
+
+        // Background
+        ctx.setFillColor(CGColor(red: 10/255, green: 10/255, blue: 10/255, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: 32, height: 32))
+
+        // Helper to fill rect (flip y since CGContext is bottom-up)
+        func px(_ x: Int, _ y: Int, _ w: Int, _ h: Int, r: CGFloat, g: CGFloat, b: CGFloat, a: CGFloat = 1) {
+            ctx.setFillColor(CGColor(red: r/255, green: g/255, blue: b/255, alpha: a))
+            ctx.fill(CGRect(x: x, y: 32 - y - h, width: w, height: h))
+        }
+
+        // Mast
+        px(12, 4, 1, 17, r: 139, g: 26, b: 26)
+
+        // Sail - rasterized triangles as pixel rows
+        // Base red sail: triangle (13,5)→(24,14)→(13,17)
+        // For each row, calculate x extent
+        for row in 5...16 {
+            let leftX = 13
+            let rightX: Int
+            if row <= 14 {
+                // Top edge: (13,5)→(24,14), slope = 11/9
+                rightX = 13 + Int(Double(row - 5) * 11.0 / 9.0)
+            } else {
+                // Bottom edge: (13,17)→(24,14), slope = 11/3
+                rightX = 13 + Int(Double(17 - row) * 11.0 / 3.0)
+            }
+            if rightX > leftX {
+                px(leftX, row, rightX - leftX, 1, r: 224, g: 64, b: 64)
+            }
+        }
+
+        // Mid red sail: triangle (17,8)→(24,14)→(17,17)
+        for row in 8...16 {
+            let leftX = 17
+            let rightX: Int
+            if row <= 14 {
+                rightX = 17 + Int(Double(row - 8) * 7.0 / 6.0)
+            } else {
+                rightX = 17 + Int(Double(17 - row) * 7.0 / 3.0)
+            }
+            if rightX > leftX {
+                px(leftX, row, rightX - leftX, 1, r: 240, g: 112, b: 112)
+            }
+        }
+
+        // Light pink highlight: triangle (20,10)→(24,14)→(20,17)
+        for row in 10...16 {
+            let leftX = 20
+            let rightX: Int
+            if row <= 14 {
+                rightX = 20 + Int(Double(row - 10) * 4.0 / 4.0)
+            } else {
+                rightX = 20 + Int(Double(17 - row) * 4.0 / 3.0)
+            }
+            if rightX > leftX {
+                px(leftX, row, rightX - leftX, 1, r: 240, g: 160, b: 160)
+            }
+        }
+
+        // First water line (behind hull)
+        px(2, 22, 28, 1, r: 0, g: 153, b: 255)
+
+        // Hull bottom (wider, darker)
+        px(7, 21, 18, 3, r: 107, g: 16, b: 16)
+        // Hull top (narrower, lighter)
+        px(9, 20, 14, 3, r: 139, g: 26, b: 26)
+
+        // Water lines below hull
+        px(2, 25, 28, 1, r: 0, g: 153, b: 255)
+        px(2, 27, 28, 1, r: 0, g: 153, b: 255)
+        px(2, 29, 28, 1, r: 0, g: 153, b: 255)
+
+        // Radial glow on lower water lines
+        let center = CGPoint(x: 16, y: 32 - 27)
+        for row in [25, 27, 29] {
+            for col in 2..<30 {
+                let dx = Double(col) - Double(center.x)
+                let dy = Double(32 - row) - Double(center.y)
+                let dist = sqrt(dx * dx + dy * dy)
+                if dist < 10 {
+                    let alpha = 0.35 * (1.0 - dist / 10.0)
+                    ctx.setFillColor(CGColor(red: 102/255, green: 204/255, blue: 255/255, alpha: alpha))
+                    ctx.fill(CGRect(x: col, y: 32 - row - 1, width: 1, height: 1))
+                }
+            }
+        }
+
+        image.unlockFocus()
+        return image
+    }()
+
+    var body: some View {
+        Image(nsImage: Self.boatImage)
+            .interpolation(.none)
+            .resizable()
+            .aspectRatio(1, contentMode: .fit)
+    }
+}
+
 /// Scrolling ticker notification bar - classic news ticker style (right to left)
 struct NotificationTickerView: View {
     @EnvironmentObject var appState: AppState
@@ -326,6 +436,24 @@ struct ModListView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Branding header
+            VStack(spacing: 4) {
+                PixelBoatView()
+                    .frame(width: 48, height: 48)
+
+                HStack(spacing: 0) {
+                    Text("SAIL")
+                        .font(.pixel(size: 11))
+                        .foregroundColor(.retroRed)
+                    Text("SWIFT")
+                        .font(.pixel(size: 11))
+                        .foregroundColor(.retroOrange)
+                }
+                .shadow(color: Color(red: 139/255, green: 26/255, blue: 26/255), radius: 0, x: 1, y: 1)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+
             // Notification ticker (above mods section)
             NotificationTickerView()
 
@@ -353,7 +481,7 @@ struct ModListView: View {
                 } header: {
                     HStack {
                         Image(systemName: rootFolderIcon).foregroundColor(rootFolderColor)
-                        Text("mods").fontWeight(.semibold)
+                        Text("mods").font(.pixel(size: 8))
                         Spacer()
                         Text("\(appState.mods.count)").foregroundColor(.secondary).font(.caption)
                     }
@@ -406,7 +534,7 @@ struct ModListView: View {
             Button {
                 appState.toggleMultiSelectMode()
             } label: {
-                Image(systemName: appState.isInMultiSelectMode ? "checkmark.circle.fill" : "checkmark.circle")
+                Image("pixel-check-box")
             }
             .buttonStyle(.borderless)
             .foregroundColor(appState.isInMultiSelectMode ? .blue : .secondary)
@@ -418,7 +546,7 @@ struct ModListView: View {
                     toggleNode(node)
                 }
             } label: {
-                Image(systemName: "power")
+                Image("pixel-bolt")
             }
             .buttonStyle(.borderless)
             .disabled(selectedNode == nil || appState.isInMultiSelectMode)
@@ -428,7 +556,7 @@ struct ModListView: View {
             Button {
                 deleteSelectedItem()
             } label: {
-                Image(systemName: "trash")
+                Image("pixel-trash")
             }
             .buttonStyle(.borderless)
             .disabled(selectedNode == nil && appState.selectedFolders.isEmpty)
@@ -447,7 +575,7 @@ struct ModListView: View {
             Button {
                 FileService.shared.openInFinder(appState.modsDirectory)
             } label: {
-                Image(systemName: "folder")
+                Image("pixel-folder-open")
             }
             .buttonStyle(.borderless)
             .help("Open mods folder")
@@ -456,7 +584,7 @@ struct ModListView: View {
             Button {
                 Task { await appState.loadMods() }
             } label: {
-                Image(systemName: "arrow.clockwise")
+                Image("pixel-refresh")
             }
             .buttonStyle(.borderless)
             .help("Refresh mod list")
@@ -499,9 +627,9 @@ struct ModListView: View {
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(.secondary)
                         .frame(width: 12)
-                    Image(systemName: "arrow.up.arrow.down.circle.fill")
-                        .foregroundColor(.blue)
-                    Text("Load Order").fontWeight(.semibold)
+                    Image("pixel-sort")
+                        .foregroundColor(.retroBlue)
+                    Text("Load Order").font(.pixel(size: 8)).foregroundColor(.retroBlue)
                     Spacer()
                     Text("\(appState.modLoadOrder.count)")
                         .foregroundColor(.secondary)
@@ -560,9 +688,9 @@ struct ModListView: View {
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(.secondary)
                         .frame(width: 12)
-                    Image(systemName: "person.crop.circle.fill")
-                        .foregroundColor(.purple)
-                    Text("Profiles").fontWeight(.semibold)
+                    Image("pixel-user")
+                        .foregroundColor(.retroOrange)
+                    Text("Profiles").font(.pixel(size: 8)).foregroundColor(.retroOrange)
                     Spacer()
                     Text("\(appState.profileManager.profiles.count)")
                         .foregroundColor(.secondary)

@@ -53,11 +53,11 @@ struct MainView: View {
             ToolbarItemGroup(placement: .principal) {
                 Picker("View", selection: $detailMode) {
                     ForEach(DetailViewMode.allCases, id: \.self) { mode in
-                        Text(mode.rawValue).tag(mode)
+                        Text(mode.rawValue).font(.pixel(size: 8)).tag(mode)
                     }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 180)
+                .frame(width: 200)
             }
 
             ToolbarItemGroup(placement: .secondaryAction) {

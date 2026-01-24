@@ -67,9 +67,14 @@ struct ModThumbnailView: View {
                 placeholderView
             }
         }
-        .frame(width: size.width, height: size.height)
-        .cornerRadius(size.cornerRadius)
+        .frame(
+            minWidth: size.width ?? 0,
+            maxWidth: size.width ?? .infinity,
+            minHeight: size.height,
+            maxHeight: size.height
+        )
         .clipped()
+        .cornerRadius(size.cornerRadius)
     }
 
     private var placeholderView: some View {
