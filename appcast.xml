@@ -12,27 +12,20 @@
             <sparkle:shortVersionString>1.1.4</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
             <description><![CDATA[
-<h2>What's New in v1.1.2</h2>
+<h2>What's New in v1.1.4</h2>
 
 <h3>New Features</h3>
 <ul>
-    <li><strong>Action Bar</strong> - New bottom toolbar with quick access buttons for multi-select, toggle, delete, open folder, and refresh</li>
-    <li><strong>Multi-Select Mode</strong> - Toggle button to enter selection mode without holding Command</li>
-    <li><strong>Modpack to Profile</strong> - Option to save imported modpacks as profiles</li>
-    <li><strong>Load Order Auto-Sync</strong> - All enabled mods now show their load order position consistently</li>
+    <li><strong>Mod Updates</strong> - Click the orange Update badge or right-click → Update Mod to download the latest version in-place</li>
+    <li><strong>Folder Context Menu</strong> - Right-click any folder for quick actions (Update Mod, Show in Finder)</li>
+    <li><strong>Pixel Art UI</strong> - Retro pixel icons for action bar buttons and pixel boat branding</li>
 </ul>
 
 <h3>Bug Fixes</h3>
 <ul>
-    <li>Fixed folders not responding to clicks consistently</li>
-    <li>Individual mod file states now preserved in modpack export/import</li>
-    <li>Modpack export count now correctly shows folders instead of individual files</li>
-    <li>Load order numbers display for all enabled mods, not just those toggled in Sailswift</li>
-</ul>
-
-<h3>Changes</h3>
-<ul>
-    <li>Toggle, Delete, Refresh, and Open Folder buttons moved from toolbar to action bar</li>
+    <li>Re-downloading a mod no longer creates duplicate files with _1 suffix</li>
+    <li>Browse mode thumbnails no longer stretch cards when images have extreme aspect ratios</li>
+    <li>Download speeds now match browser speeds</li>
 </ul>
             ]]></description>
             <enclosure url="https://github.com/proverbiallemon/Sailswift/releases/download/v1.1.4/Sailswift-1.1.4.zip"
