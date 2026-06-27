@@ -33,7 +33,7 @@ Native macOS mod manager for **Ship of Harkinian** - built with Swift and SwiftU
 Download the latest release from the [Releases](https://github.com/proverbiallemon/Sailswift/releases) page, or install via Homebrew:
 
 ```bash
-brew trust --cask pocketbeardev/sailswift/sailswift && brew install --cask pocketbeardev/sailswift/sailswift
+brew trust --cask pocketbeardev/sailswift/sailswift && brew install --cask sailswift
 ```
 
 **[Detailed installation guide →](https://github.com/proverbiallemon/Sailswift/wiki/Installation)**
