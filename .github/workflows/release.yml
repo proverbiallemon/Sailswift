@@ -253,7 +253,7 @@ jobs:
 
       - name: Trigger Homebrew Tap Update
         if: ${{ !contains(github.ref, 'beta') && !contains(github.ref, 'alpha') }}
-        uses: peter-evans/repository-dispatch@v2
+        uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           repository: PocketBearDev/homebrew-sailswift
