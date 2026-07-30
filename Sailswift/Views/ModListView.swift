@@ -644,10 +644,10 @@ struct ModListView: View {
             if loadOrderExpanded {
                 // Reorderable list with onMove
                 List {
-                    ForEach(appState.modLoadOrder, id: \.self) { modName in
+                    ForEach(Array(appState.modLoadOrder.enumerated()), id: \.offset) { index, modName in
                         LoadOrderRowView(
                             modName: modName,
-                            index: appState.modLoadOrder.firstIndex(of: modName) ?? 0,
+                            index: index,
                             totalCount: appState.modLoadOrder.count,
                             onToggle: {
                                 if let mod = appState.mods.first(where: { $0.name == modName }) {

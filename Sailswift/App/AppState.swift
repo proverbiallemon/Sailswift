@@ -266,8 +266,17 @@ class AppState: ObservableObject {
         do {
             mods = try await modManager.loadMods(from: modsDirectory, loadOrder: modLoadOrder)
 
-            // Ensure all enabled mods are in the load order
             var loadOrderChanged = false
+
+            // Remove duplicate entries. The config can carry them from older
+            // versions, and .otr/.o2r siblings share one extensionless name.
+            let dedupedLoadOrder = modLoadOrder.removingDuplicatesKeepingFirst()
+            if dedupedLoadOrder.count != modLoadOrder.count {
+                modLoadOrder = dedupedLoadOrder
+                loadOrderChanged = true
+            }
+
+            // Ensure all enabled mods are in the load order
             for mod in mods where mod.isEnabled {
                 if !modLoadOrder.contains(mod.name) {
                     modLoadOrder.append(mod.name)

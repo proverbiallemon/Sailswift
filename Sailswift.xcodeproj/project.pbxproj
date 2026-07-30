@@ -34,12 +34,15 @@
 		1000000000000071 /* PressStart2P-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 2000000000000071 /* PressStart2P-Regular.ttf */; };
 		1000000000000080 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2000000000000080 /* Assets.xcassets */; };
 		15B3504F54F51621EAE3153D /* GameConfigService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000041 /* GameConfigService.swift */; };
+		198023F959DC26E54EB55892 /* LoadOrderDedupeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EECA4F47C0CF1C6667BF713 /* LoadOrderDedupeTests.swift */; };
 		6CDA87B32F1E233C00739D35 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 6CDA87B22F1E233C00739D35 /* Sparkle */; };
 		6CDA87B52F1E24FE00739D35 /* UpdaterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CDA87B42F1E24FE00739D35 /* UpdaterService.swift */; };
 		6CDA87B62F1E250000739D35 /* ModUpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CDA87B72F1E250000739D35 /* ModUpdateChecker.swift */; };
 		6CDA87B82F20392B00739D35 /* Marquee in Frameworks */ = {isa = PBXBuildFile; productRef = 6CDA87B72F20392B00739D35 /* Marquee */; };
 		6CDA87BB2F20485A00739D35 /* Pow in Frameworks */ = {isa = PBXBuildFile; productRef = 6CDA87BA2F20485A00739D35 /* Pow */; };
+		6DD636D440237EF07671B427 /* ArrayDeduplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ABD55245E1751EC6A1F5AAA /* ArrayDeduplication.swift */; };
 		7D5488588A0C40DF2CCD2193 /* GameConfigServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8CFE1235D1D5A5C729BD85E /* GameConfigServiceTests.swift */; };
+		A08C92554001A98D8674BEEA /* ArrayDeduplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ABD55245E1751EC6A1F5AAA /* ArrayDeduplication.swift */; };
 		CD0EACC74FAD0121956BA5C5 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 24E1E9EDB76118E6214A0BB8 /* Cocoa.framework */; };
 		E5C284D9EF2F24BE9A9A4D24 /* PathConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000050 /* PathConstants.swift */; };
 /* End PBXBuildFile section */
@@ -74,10 +77,12 @@
 		2000000000000071 /* PressStart2P-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "PressStart2P-Regular.ttf"; sourceTree = "<group>"; };
 		2000000000000080 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		24E1E9EDB76118E6214A0BB8 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/System/Library/Frameworks/Cocoa.framework; sourceTree = DEVELOPER_DIR; };
+		2ABD55245E1751EC6A1F5AAA /* ArrayDeduplication.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ArrayDeduplication.swift; sourceTree = "<group>"; };
 		3000000000000000 /* Sailswift.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Sailswift.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6CDA87B42F1E24FE00739D35 /* UpdaterService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdaterService.swift; sourceTree = "<group>"; };
 		6CDA87B72F1E250000739D35 /* ModUpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModUpdateChecker.swift; sourceTree = "<group>"; };
 		837B68B48A7FC5B050F27D47 /* SailswiftTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SailswiftTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		8EECA4F47C0CF1C6667BF713 /* LoadOrderDedupeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LoadOrderDedupeTests.swift; sourceTree = "<group>"; };
 		A8CFE1235D1D5A5C729BD85E /* GameConfigServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GameConfigServiceTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -193,6 +198,7 @@
 			children = (
 				2000000000000050 /* PathConstants.swift */,
 				2000000000000051 /* Extensions.swift */,
+				2ABD55245E1751EC6A1F5AAA /* ArrayDeduplication.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -227,6 +233,7 @@
 			isa = PBXGroup;
 			children = (
 				A8CFE1235D1D5A5C729BD85E /* GameConfigServiceTests.swift */,
+				8EECA4F47C0CF1C6667BF713 /* LoadOrderDedupeTests.swift */,
 			);
 			name = SailswiftTests;
 			path = SailswiftTests;
@@ -366,6 +373,7 @@
 				1000000000000041 /* GameConfigService.swift in Sources */,
 				1000000000000050 /* PathConstants.swift in Sources */,
 				1000000000000051 /* Extensions.swift in Sources */,
+				A08C92554001A98D8674BEEA /* ArrayDeduplication.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -376,6 +384,8 @@
 				7D5488588A0C40DF2CCD2193 /* GameConfigServiceTests.swift in Sources */,
 				15B3504F54F51621EAE3153D /* GameConfigService.swift in Sources */,
 				E5C284D9EF2F24BE9A9A4D24 /* PathConstants.swift in Sources */,
+				198023F959DC26E54EB55892 /* LoadOrderDedupeTests.swift in Sources */,
+				6DD636D440237EF07671B427 /* ArrayDeduplication.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
