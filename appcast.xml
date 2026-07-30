@@ -6,31 +6,42 @@
         <description>Sailswift update feed</description>
         <language>en</language>
         <item>
-            <title>Version 1.1.4</title>
-            <pubDate>Sat, 24 Jan 2026 18:42:17 +0000</pubDate>
-            <sparkle:version>26</sparkle:version>
-            <sparkle:shortVersionString>1.1.4</sparkle:shortVersionString>
+            <title>Version 1.1.5</title>
+            <pubDate>Thu, 30 Jul 2026 19:54:38 +0000</pubDate>
+            <sparkle:version>27</sparkle:version>
+            <sparkle:shortVersionString>1.1.5</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
             <description><![CDATA[
-<h2>What's New in v1.1.4</h2>
+<h2>What's New in v1.1.5</h2>
 
-<h3>New Features</h3>
+<h3>Important Fix: Game Settings Preservation</h3>
 <ul>
-    <li><strong>Mod Updates</strong> - Click the orange Update badge or right-click → Update Mod to download the latest version in-place</li>
-    <li><strong>Folder Context Menu</strong> - Right-click any folder for quick actions (Update Mod, Show in Finder)</li>
-    <li><strong>Pixel Art UI</strong> - Retro pixel icons for action bar buttons and pixel boat branding</li>
+    <li><strong>Sailswift no longer resets your Ship of Harkinian settings.</strong> Earlier versions unintentionally wiped everything but mod settings from shipofharkinian.json (controller bindings, enhancements, randomizer settings, window/audio options) whenever a mod was toggled, reordered, or deleted. If your SoH settings ever mysteriously reset, this was why - our apologies! You'll need to reconfigure them once; they'll stick from now on.</li>
+</ul>
+
+<h3>Signed &amp; Notarized</h3>
+<ul>
+    <li>Sailswift is now signed with a Developer ID and notarized by Apple. No more Gatekeeper warnings or right-click-to-open on first launch.</li>
 </ul>
 
 <h3>Bug Fixes</h3>
 <ul>
-    <li>Re-downloading a mod no longer creates duplicate files with _1 suffix</li>
-    <li>Browse mode thumbnails no longer stretch cards when images have extreme aspect ratios</li>
-    <li>Download speeds now match browser speeds</li>
+    <li>Load order no longer shows duplicate entries with wrong position numbers</li>
+    <li>Failed mod updates no longer report success or clear the update badge</li>
+    <li>Modpack import counts now reflect what actually installed</li>
+    <li>One-click installs from GameBanana now work for Texture, Model, Map, Spray, and Gui items</li>
+    <li>Browse catalog retries failed pages and tells you when results are partial instead of silently showing an incomplete list</li>
+    <li>Large downloads no longer spike memory during checksum verification</li>
+</ul>
+
+<h3>Security</h3>
+<ul>
+    <li>Archives are checked for unsafe paths before extraction, not after</li>
 </ul>
             ]]></description>
-            <enclosure url="https://github.com/proverbiallemon/Sailswift/releases/download/v1.1.4/Sailswift-1.1.4.zip"
-                       sparkle:edSignature="njGMkP/6AG4vIj7gFagDD6WrTJ0y7XXxg+Xqw4S27a0DVZ5BYJRe3erJnuDs0fL4IxNv6PASuDwwLWzV+T3NAw=="
-                       length="3556249"
+            <enclosure url="https://github.com/proverbiallemon/Sailswift/releases/download/v1.1.5/Sailswift-1.1.5.zip"
+                       sparkle:edSignature="sRzNyKhWyvbraS1CRLBWK3jXYmFIja+m28uEgYlCP6ZCLjdDV17yfcG/EezSo1V1drlSoJpUse6wX9b01133DA=="
+                       length="3699723"
                        type="application/octet-stream" />
         </item>
     </channel>
