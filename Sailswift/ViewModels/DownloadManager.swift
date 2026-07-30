@@ -267,6 +267,9 @@ class DownloadManager: ObservableObject {
         // Detect archive type and extract accordingly
         let lowercasedFilename = archiveURL.lastPathComponent.lowercased()
 
+        // Security: reject traversal/absolute entries before anything is written
+        try validateArchiveListing(of: archiveURL, lowercasedFilename: lowercasedFilename)
+
         if lowercasedFilename.hasSuffix(".7z") {
             // Use 7-Zip for .7z files
             try await extract7z(from: archiveURL, to: extractDir)
@@ -314,6 +317,55 @@ class DownloadManager: ObservableObject {
         }
 
         return installedCount
+    }
+
+    /// List archive entries and reject unsafe paths before extraction.
+    /// ZIPs are listed with unzip; 7z/RAR with 7-Zip when it is available
+    /// (when it isn't, extraction fails anyway or falls back to unar, and
+    /// the post-extraction symlink check still applies).
+    private func validateArchiveListing(of archiveURL: URL, lowercasedFilename: String) throws {
+        let entries: [String]
+        if lowercasedFilename.hasSuffix(".7z") || lowercasedFilename.hasSuffix(".rar") {
+            guard let sevenZipPath = find7zBinary() else { return }
+            entries = try listEntries(
+                launchPath: sevenZipPath,
+                arguments: ["l", "-ba", "-slt", archiveURL.path]
+            ).compactMap { line in
+                line.hasPrefix("Path = ") ? String(line.dropFirst("Path = ".count)) : nil
+            }
+        } else {
+            entries = try listEntries(
+                launchPath: "/usr/bin/unzip",
+                arguments: ["-Z1", archiveURL.path]
+            )
+        }
+
+        do {
+            try ArchiveEntryValidator.validate(entries: entries)
+        } catch {
+            print("[DownloadManager] Unsafe archive entry rejected: \(error)")
+            throw DownloadError.zipSlipDetected
+        }
+    }
+
+    private func listEntries(launchPath: String, arguments: [String]) throws -> [String] {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: launchPath)
+        process.arguments = arguments
+
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = Pipe()
+
+        try process.run()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+
+        guard process.terminationStatus == 0 else {
+            throw DownloadError.extractionFailed
+        }
+        let output = String(data: data, encoding: .utf8) ?? ""
+        return output.components(separatedBy: .newlines).filter { !$0.isEmpty }
     }
 
     /// Extract a ZIP archive using ditto
