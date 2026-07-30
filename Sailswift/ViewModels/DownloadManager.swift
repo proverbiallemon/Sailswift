@@ -128,12 +128,10 @@ class DownloadManager: ObservableObject {
 
             print("[DownloadManager] Downloaded to temp: \(tempFile.path)")
 
-            // Security: Verify MD5 checksum if provided
+            // Security: Verify MD5 checksum if provided (streamed; archives can be GBs)
             if !file.md5.isEmpty {
-                let data = try Data(contentsOf: tempFile)
-                let computedMD5 = Insecure.MD5.hash(data: data)
-                let computedMD5String = computedMD5.map { String(format: "%02hhx", $0) }.joined()
-                if computedMD5String.lowercased() != file.md5.lowercased() {
+                let computedMD5String = try FileChecksum.md5(of: tempFile)
+                if computedMD5String != file.md5.lowercased() {
                     try? FileManager.default.removeItem(at: tempFile)
                     throw DownloadError.checksumMismatch
                 }

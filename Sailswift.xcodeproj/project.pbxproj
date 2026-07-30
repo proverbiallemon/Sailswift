@@ -36,6 +36,7 @@
 		1000000000000080 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2000000000000080 /* Assets.xcassets */; };
 		15B3504F54F51621EAE3153D /* GameConfigService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000041 /* GameConfigService.swift */; };
 		198023F959DC26E54EB55892 /* LoadOrderDedupeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EECA4F47C0CF1C6667BF713 /* LoadOrderDedupeTests.swift */; };
+		3EC78F2A75B40461A3744401 /* FileChecksum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E8AB58AECA72B960B72988A /* FileChecksum.swift */; };
 		414E6AC81FE6065E3D751EAE /* Retry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4055D24280461B6DFABD0F3E /* Retry.swift */; };
 		5E3511162E59E563C9F63D3E /* ArchiveEntryValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FDB92D4FE5CEB1DA9B5CB74 /* ArchiveEntryValidator.swift */; };
 		6CDA87B32F1E233C00739D35 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 6CDA87B22F1E233C00739D35 /* Sparkle */; };
@@ -47,9 +48,11 @@
 		7D5488588A0C40DF2CCD2193 /* GameConfigServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8CFE1235D1D5A5C729BD85E /* GameConfigServiceTests.swift */; };
 		9EA1B7CB5A5BD3368FF87366 /* RetryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E9ECED8D1B95E542F7A8A79 /* RetryTests.swift */; };
 		A08C92554001A98D8674BEEA /* ArrayDeduplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ABD55245E1751EC6A1F5AAA /* ArrayDeduplication.swift */; };
+		A1E9D874DCD725A2E3D6D1DA /* FileChecksumTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F14A61822770AD4DBD07AA3 /* FileChecksumTests.swift */; };
 		A40A96C603A16CEAD6575661 /* ModDownloadRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49E1153CE8121B0C043ED278 /* ModDownloadRequest.swift */; };
 		AA69FA5043744B8E7BFCEF12 /* ModDownloadRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49E1153CE8121B0C043ED278 /* ModDownloadRequest.swift */; };
 		CD0EACC74FAD0121956BA5C5 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 24E1E9EDB76118E6214A0BB8 /* Cocoa.framework */; };
+		D087C868B9FF4C05FE52EB32 /* FileChecksum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E8AB58AECA72B960B72988A /* FileChecksum.swift */; };
 		E5C284D9EF2F24BE9A9A4D24 /* PathConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000050 /* PathConstants.swift */; };
 		E8FA49C621775DE94967EEB7 /* Retry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4055D24280461B6DFABD0F3E /* Retry.swift */; };
 		ED838D3B70AC2E5F2CA63742 /* ArchiveEntryValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FDB92D4FE5CEB1DA9B5CB74 /* ArchiveEntryValidator.swift */; };
@@ -57,7 +60,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		0F14A61822770AD4DBD07AA3 /* FileChecksumTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FileChecksumTests.swift; sourceTree = "<group>"; };
 		0FDB92D4FE5CEB1DA9B5CB74 /* ArchiveEntryValidator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ArchiveEntryValidator.swift; sourceTree = "<group>"; };
+		1E8AB58AECA72B960B72988A /* FileChecksum.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FileChecksum.swift; sourceTree = "<group>"; };
 		2000000000000001 /* SailswiftApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SailswiftApp.swift; sourceTree = "<group>"; };
 		2000000000000002 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		2000000000000010 /* Mod.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Mod.swift; sourceTree = "<group>"; };
@@ -217,6 +222,7 @@
 				2000000000000051 /* Extensions.swift */,
 				2ABD55245E1751EC6A1F5AAA /* ArrayDeduplication.swift */,
 				4055D24280461B6DFABD0F3E /* Retry.swift */,
+				1E8AB58AECA72B960B72988A /* FileChecksum.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -255,6 +261,7 @@
 				711E7179453649E89A7E6DA1 /* ModDownloadRequestTests.swift */,
 				3EA198877580751128FF08CD /* ArchiveEntryValidatorTests.swift */,
 				6E9ECED8D1B95E542F7A8A79 /* RetryTests.swift */,
+				0F14A61822770AD4DBD07AA3 /* FileChecksumTests.swift */,
 			);
 			name = SailswiftTests;
 			path = SailswiftTests;
@@ -398,6 +405,7 @@
 				A40A96C603A16CEAD6575661 /* ModDownloadRequest.swift in Sources */,
 				5E3511162E59E563C9F63D3E /* ArchiveEntryValidator.swift in Sources */,
 				414E6AC81FE6065E3D751EAE /* Retry.swift in Sources */,
+				D087C868B9FF4C05FE52EB32 /* FileChecksum.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -416,6 +424,8 @@
 				ED838D3B70AC2E5F2CA63742 /* ArchiveEntryValidator.swift in Sources */,
 				9EA1B7CB5A5BD3368FF87366 /* RetryTests.swift in Sources */,
 				E8FA49C621775DE94967EEB7 /* Retry.swift in Sources */,
+				A1E9D874DCD725A2E3D6D1DA /* FileChecksumTests.swift in Sources */,
+				3EC78F2A75B40461A3744401 /* FileChecksum.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
