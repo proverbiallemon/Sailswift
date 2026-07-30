@@ -33,11 +33,15 @@
 		1000000000000070 /* gamebanana-icon.png in Resources */ = {isa = PBXBuildFile; fileRef = 2000000000000070 /* gamebanana-icon.png */; };
 		1000000000000071 /* PressStart2P-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 2000000000000071 /* PressStart2P-Regular.ttf */; };
 		1000000000000080 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2000000000000080 /* Assets.xcassets */; };
+		15B3504F54F51621EAE3153D /* GameConfigService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000041 /* GameConfigService.swift */; };
 		6CDA87B32F1E233C00739D35 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 6CDA87B22F1E233C00739D35 /* Sparkle */; };
 		6CDA87B52F1E24FE00739D35 /* UpdaterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CDA87B42F1E24FE00739D35 /* UpdaterService.swift */; };
 		6CDA87B62F1E250000739D35 /* ModUpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CDA87B72F1E250000739D35 /* ModUpdateChecker.swift */; };
 		6CDA87B82F20392B00739D35 /* Marquee in Frameworks */ = {isa = PBXBuildFile; productRef = 6CDA87B72F20392B00739D35 /* Marquee */; };
 		6CDA87BB2F20485A00739D35 /* Pow in Frameworks */ = {isa = PBXBuildFile; productRef = 6CDA87BA2F20485A00739D35 /* Pow */; };
+		7D5488588A0C40DF2CCD2193 /* GameConfigServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8CFE1235D1D5A5C729BD85E /* GameConfigServiceTests.swift */; };
+		CD0EACC74FAD0121956BA5C5 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 24E1E9EDB76118E6214A0BB8 /* Cocoa.framework */; };
+		E5C284D9EF2F24BE9A9A4D24 /* PathConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000050 /* PathConstants.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -69,9 +73,12 @@
 		2000000000000070 /* gamebanana-icon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "gamebanana-icon.png"; sourceTree = "<group>"; };
 		2000000000000071 /* PressStart2P-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "PressStart2P-Regular.ttf"; sourceTree = "<group>"; };
 		2000000000000080 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		24E1E9EDB76118E6214A0BB8 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/System/Library/Frameworks/Cocoa.framework; sourceTree = DEVELOPER_DIR; };
 		3000000000000000 /* Sailswift.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Sailswift.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6CDA87B42F1E24FE00739D35 /* UpdaterService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdaterService.swift; sourceTree = "<group>"; };
 		6CDA87B72F1E250000739D35 /* ModUpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModUpdateChecker.swift; sourceTree = "<group>"; };
+		837B68B48A7FC5B050F27D47 /* SailswiftTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SailswiftTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A8CFE1235D1D5A5C729BD85E /* GameConfigServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GameConfigServiceTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -85,6 +92,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C323A5F051EE160F9001B54C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CD0EACC74FAD0121956BA5C5 /* Cocoa.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -93,6 +108,8 @@
 			children = (
 				5000000000000001 /* Sailswift */,
 				5000000000000099 /* Products */,
+				FE1BFB98489E524E3FA1D516 /* Frameworks */,
+				D5909537D171A3F13038EFDC /* SailswiftTests */,
 			);
 			sourceTree = "<group>";
 		};
@@ -193,8 +210,34 @@
 			isa = PBXGroup;
 			children = (
 				3000000000000000 /* Sailswift.app */,
+				837B68B48A7FC5B050F27D47 /* SailswiftTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		AFB75DB031A62872B11ED5C9 /* OS X */ = {
+			isa = PBXGroup;
+			children = (
+				24E1E9EDB76118E6214A0BB8 /* Cocoa.framework */,
+			);
+			name = "OS X";
+			sourceTree = "<group>";
+		};
+		D5909537D171A3F13038EFDC /* SailswiftTests */ = {
+			isa = PBXGroup;
+			children = (
+				A8CFE1235D1D5A5C729BD85E /* GameConfigServiceTests.swift */,
+			);
+			name = SailswiftTests;
+			path = SailswiftTests;
+			sourceTree = "<group>";
+		};
+		FE1BFB98489E524E3FA1D516 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				AFB75DB031A62872B11ED5C9 /* OS X */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -216,6 +259,23 @@
 			productName = Sailswift;
 			productReference = 3000000000000000 /* Sailswift.app */;
 			productType = "com.apple.product-type.application";
+		};
+		E37031426E3446D048C841CE /* SailswiftTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6D42FBEFCA25614AE59163D5 /* Build configuration list for PBXNativeTarget "SailswiftTests" */;
+			buildPhases = (
+				C5999DE66D93818CA1197C2C /* Sources */,
+				C323A5F051EE160F9001B54C /* Frameworks */,
+				6446AD5C4B817DC1A5373126 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SailswiftTests;
+			productName = SailswiftTests;
+			productReference = 837B68B48A7FC5B050F27D47 /* SailswiftTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -251,6 +311,7 @@
 			projectRoot = "";
 			targets = (
 				6000000000000001 /* Sailswift */,
+				E37031426E3446D048C841CE /* SailswiftTests */,
 			);
 		};
 /* End PBXProject section */
@@ -263,6 +324,13 @@
 				1000000000000080 /* Assets.xcassets in Resources */,
 				1000000000000070 /* gamebanana-icon.png in Resources */,
 				1000000000000071 /* PressStart2P-Regular.ttf in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6446AD5C4B817DC1A5373126 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -298,6 +366,16 @@
 				1000000000000041 /* GameConfigService.swift in Sources */,
 				1000000000000050 /* PathConstants.swift in Sources */,
 				1000000000000051 /* Extensions.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C5999DE66D93818CA1197C2C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7D5488588A0C40DF2CCD2193 /* GameConfigServiceTests.swift in Sources */,
+				15B3504F54F51621EAE3153D /* GameConfigService.swift in Sources */,
+				E5C284D9EF2F24BE9A9A4D24 /* PathConstants.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -486,9 +564,48 @@
 			};
 			name = Release;
 		};
+		CED2EDC473088DC9EB49AA28 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.proverbiallemon.SailswiftTests;
+				PRODUCT_MODULE_NAME = SailswiftTests;
+				PRODUCT_NAME = SailswiftTests;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		DDC7C15472DE73CEDBAFBF70 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.proverbiallemon.SailswiftTests;
+				PRODUCT_MODULE_NAME = SailswiftTests;
+				PRODUCT_NAME = SailswiftTests;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		6D42FBEFCA25614AE59163D5 /* Build configuration list for PBXNativeTarget "SailswiftTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CED2EDC473088DC9EB49AA28 /* Release */,
+				DDC7C15472DE73CEDBAFBF70 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		7000000000000001 /* Build configuration list for PBXProject "Sailswift" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

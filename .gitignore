@@ -23,3 +23,4 @@ xcuserdata/
 *.swo
 *~
 releases/
+.playwright-mcp/

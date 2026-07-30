@@ -1,6 +1,11 @@
 import Foundation
 
 /// Service for managing the Ship of Harkinian configuration file
+///
+/// The config file is owned by the game and contains many settings Sailswift
+/// does not model (window, controllers, enhancements, randomizer, ...).
+/// All writes therefore mutate the JSON in place and only ever touch
+/// `CVars.gSettings.AltAssets` and `CVars.gSettings.EnabledMods`.
 class GameConfigService {
     private let configURL: URL
 
@@ -10,24 +15,19 @@ class GameConfigService {
 
     /// Enable AltAssets in the configuration
     func enableAltAssets() throws {
-        var config = try loadConfig()
-
-        if config.cvars == nil {
-            config.cvars = CVars(gSettings: GSettings(altAssets: 1))
-        } else if config.cvars?.gSettings == nil {
-            config.cvars?.gSettings = GSettings(altAssets: 1)
-        } else {
-            config.cvars?.gSettings?.altAssets = 1
+        try updateGSettings { gSettings in
+            gSettings["AltAssets"] = 1
         }
-
-        try saveConfig(config)
     }
 
     /// Get the mod load order from the configuration
     /// Returns an array of mod names in load order (earlier = lower priority)
     func getModLoadOrder() throws -> [String] {
-        let config = try loadConfig()
-        guard let enabledMods = config.cvars?.gSettings?.enabledMods, !enabledMods.isEmpty else {
+        let root = try loadRoot()
+        guard let cvars = root["CVars"] as? [String: Any],
+              let gSettings = cvars["gSettings"] as? [String: Any],
+              let enabledMods = gSettings["EnabledMods"] as? String,
+              !enabledMods.isEmpty else {
             return []
         }
         // Filter out empty strings that could result from leading/trailing/consecutive pipes
@@ -37,58 +37,39 @@ class GameConfigService {
     /// Set the mod load order in the configuration
     /// - Parameter order: Array of mod names in load order (earlier = lower priority)
     func setModLoadOrder(_ order: [String]) throws {
-        var config = try loadConfig()
-
-        if config.cvars == nil {
-            config.cvars = CVars(gSettings: GSettings())
-        } else if config.cvars?.gSettings == nil {
-            config.cvars?.gSettings = GSettings()
-        }
-
         // Sanitize mod names: replace pipe characters to prevent parsing issues,
         // and filter out empty strings
         let sanitizedOrder = order
             .filter { !$0.isEmpty }
             .map { $0.replacingOccurrences(of: "|", with: "-") }
 
-        config.cvars?.gSettings?.enabledMods = sanitizedOrder.joined(separator: "|")
-        try saveConfig(config)
+        try updateGSettings { gSettings in
+            gSettings["EnabledMods"] = sanitizedOrder.joined(separator: "|")
+        }
     }
 
     // MARK: - Private Helpers
 
-    private func loadConfig() throws -> GameConfig {
-        if FileManager.default.fileExists(atPath: configURL.path) {
-            let data = try Data(contentsOf: configURL)
-            return try JSONDecoder().decode(GameConfig.self, from: data)
+    private func loadRoot() throws -> [String: Any] {
+        guard FileManager.default.fileExists(atPath: configURL.path) else {
+            return [:]
         }
-        return GameConfig(cvars: CVars(gSettings: GSettings()))
+        let data = try Data(contentsOf: configURL)
+        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        return root
     }
 
-    private func saveConfig(_ config: GameConfig) throws {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let data = try encoder.encode(config)
+    private func updateGSettings(_ mutate: (inout [String: Any]) -> Void) throws {
+        var root = try loadRoot()
+        var cvars = root["CVars"] as? [String: Any] ?? [:]
+        var gSettings = cvars["gSettings"] as? [String: Any] ?? [:]
+        mutate(&gSettings)
+        cvars["gSettings"] = gSettings
+        root["CVars"] = cvars
+
+        let data = try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
         try data.write(to: configURL)
-    }
-}
-
-struct GameConfig: Codable {
-    var cvars: CVars?
-    enum CodingKeys: String, CodingKey {
-        case cvars = "CVars"
-    }
-}
-
-struct CVars: Codable {
-    var gSettings: GSettings?
-}
-
-struct GSettings: Codable {
-    var altAssets: Int?
-    var enabledMods: String?
-    enum CodingKeys: String, CodingKey {
-        case altAssets = "AltAssets"
-        case enabledMods = "EnabledMods"
     }
 }
