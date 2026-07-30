@@ -17,6 +17,7 @@ Native macOS mod manager for **Ship of Harkinian** - built with Swift and SwiftU
 - **Update Checker** - Check installed mods for GameBanana updates
 - **GameBanana Integration** - Browse, search, and download mods in-app
 - **One-Click Install** - `shipofharkinian://` URL scheme for seamless installation
+- **Signed & Notarized** - Developer ID signed and notarized by Apple; no Gatekeeper warnings
 
 **[Full feature list →](https://github.com/proverbiallemon/Sailswift/wiki/Features)**
 
@@ -32,7 +33,7 @@ Native macOS mod manager for **Ship of Harkinian** - built with Swift and SwiftU
 Download the latest release from the [Releases](https://github.com/proverbiallemon/Sailswift/releases) page, or install via Homebrew:
 
 ```bash
-brew tap PocketBearDev/sailswift && brew install --cask sailswift
+brew trust --cask pocketbeardev/sailswift/sailswift && brew install --cask pocketbeardev/sailswift/sailswift
 ```
 
 **[Detailed installation guide →](https://github.com/proverbiallemon/Sailswift/wiki/Installation)**
