@@ -83,7 +83,12 @@ struct ModBrowserView: View {
                 }
             }
 
-            if !filteredMods.isEmpty {
+            if cache.loadedPartially {
+                Text("Partial results (\(cache.mods.count) mods) - reload to retry")
+                    .foregroundColor(.orange)
+                    .font(.caption)
+                    .help("Some pages failed to load from GameBanana; the catalog is incomplete")
+            } else if !filteredMods.isEmpty {
                 Text("\(filteredMods.count) of \(cache.mods.count) mods").foregroundColor(.secondary).font(.caption)
             }
 

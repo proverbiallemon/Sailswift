@@ -9,6 +9,8 @@ class GameBananaModCache: ObservableObject {
     @Published var isLoading = false
     @Published var loadProgress: String = ""
     @Published var hasLoaded = false
+    /// True when a page failed (after retries) and the catalog is incomplete
+    @Published var loadedPartially = false
 
     private var currentPage = 1
     private var hasMore = true
@@ -27,12 +29,16 @@ class GameBananaModCache: ObservableObject {
         currentPage = 1
         mods = []
         hasMore = true
+        loadedPartially = false
 
         let api = GameBananaAPI.shared
 
         while hasMore {
             do {
-                let result = try await api.fetchMods(page: currentPage, perPage: 50, sort: .newest, search: nil)
+                // Retry transient page failures before giving up on the catalog
+                let result = try await Retry.withAttempts(3, delayNanoseconds: 500_000_000) {
+                    try await api.fetchMods(page: currentPage, perPage: 50, sort: .newest, search: nil)
+                }
                 mods.append(contentsOf: result.mods)
                 hasMore = result.hasMore
                 loadProgress = "\(mods.count) mods loaded..."
@@ -42,6 +48,7 @@ class GameBananaModCache: ObservableObject {
                 try await Task.sleep(nanoseconds: 100_000_000)
             } catch {
                 print("Error loading mods: \(error)")
+                loadedPartially = true
                 break
             }
         }
