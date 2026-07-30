@@ -67,7 +67,7 @@ class GameBananaAPI {
     private let session: URLSession
 
     /// Valid GameBanana item types for URL path sanitization
-    private let validItemTypes: Set<String> = ["Mod", "Sound", "Skin", "Texture", "Model", "Map", "Tool", "Spray", "Gui", "Wip"]
+    private let validItemTypes = ModDownloadRequest.validItemTypes
 
     /// Sanitize item type to prevent URL injection
     private func sanitizeItemType(_ itemType: String) -> String {

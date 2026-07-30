@@ -36,65 +36,32 @@ struct SailswiftApp: App {
     }
 
     /// Handle incoming URLs from the shipofharkinian:// scheme
-    /// Format: shipofharkinian://https//gamebanana.com/mmdl/{mod_id},Mod,{file_id}
+    /// Format: shipofharkinian://https//gamebanana.com/mmdl/{file_id},{item_type},{mod_id}
     private func handleIncomingURL(_ url: URL) {
         guard url.scheme == "shipofharkinian" else { return }
 
         // Bring app to front
         NSApplication.shared.activate(ignoringOtherApps: true)
 
-        // Parse the URL - format is shipofharkinian://https//gamebanana.com/mmdl/1593301,Mod,640119
-        let urlString = url.absoluteString
+        switch ModDownloadRequest.parse(url.absoluteString) {
+        case .success(let request):
+            print("[URL Handler] Received mod download request:")
+            print("  File ID: \(request.fileId)")
+            print("  Type: \(request.itemType)")
+            print("  Mod ID: \(request.modId)")
 
-        // Remove the scheme prefix
-        let withoutScheme = urlString.replacingOccurrences(of: "shipofharkinian://", with: "")
-
-        // Fix the URL format (https// -> https://)
-        let fixedURL = withoutScheme.replacingOccurrences(of: "https//", with: "https://")
-
-        // Parse the mmdl URL
-        // Format: https://gamebanana.com/mmdl/{file_id},Mod,{mod_id}
-        if fixedURL.contains("gamebanana.com/mmdl/") {
-            let components = fixedURL.components(separatedBy: "/mmdl/")
-            if components.count == 2 {
-                let params = components[1].components(separatedBy: ",")
-                if params.count >= 3 {
-                    let fileId = params[0]
-                    let itemType = params[1]
-                    let modId = params[2]
-
-                    // Security: Validate fileId and modId are numeric
-                    guard fileId.allSatisfy({ $0.isNumber }), !fileId.isEmpty else {
-                        print("[URL Handler] Invalid fileId: not numeric")
-                        return
-                    }
-                    guard modId.allSatisfy({ $0.isNumber }), !modId.isEmpty else {
-                        print("[URL Handler] Invalid modId: not numeric")
-                        return
-                    }
-
-                    // Security: Validate itemType against allowlist
-                    let allowedItemTypes = ["Mod", "Sound", "Skin", "Tool", "Wip"]
-                    guard allowedItemTypes.contains(itemType) else {
-                        print("[URL Handler] Invalid itemType: \(itemType)")
-                        return
-                    }
-
-                    print("[URL Handler] Received mod download request:")
-                    print("  File ID: \(fileId)")
-                    print("  Type: \(itemType)")
-                    print("  Mod ID: \(modId)")
-
-                    // Show import confirmation instead of downloading immediately
-                    Task {
-                        await appState.handleImportRequest(
-                            modId: modId,
-                            itemType: itemType,
-                            fileId: fileId
-                        )
-                    }
-                }
+            // Show import confirmation instead of downloading immediately
+            Task {
+                await appState.handleImportRequest(
+                    modId: request.modId,
+                    itemType: request.itemType,
+                    fileId: request.fileId
+                )
             }
+        case .failure(.unsupportedItemType(let itemType)):
+            appState.addNotification("Can't install '\(itemType)' items from GameBanana", type: .error)
+        case .failure(let error):
+            print("[URL Handler] Rejected URL: \(error)")
         }
     }
 }
