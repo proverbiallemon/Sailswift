@@ -818,12 +818,18 @@ class AppState: ObservableObject {
                 return
             }
 
-            await downloadManager.downloadFile(
+            let succeeded = await downloadManager.downloadFile(
                 file,
                 modName: updateInfo.modName,
                 modId: updateInfo.gameBananaModId,
                 targetFolder: fullPath
             )
+
+            guard succeeded else {
+                addNotification("Update failed for \(updateInfo.modName) - old files may need re-downloading", type: .error)
+                await loadMods()
+                return
+            }
 
             modUpdateChecker.clearUpdate(for: folderPath)
             addNotification("Updated \(updateInfo.modName)", type: .success)
@@ -1148,8 +1154,7 @@ class AppState: ObservableObject {
                     guard let file = files.first else { return false }
 
                     let modName = entry.gameBananaName ?? entry.folderName
-                    await self.downloadManager.downloadFile(file, modName: modName, modId: modId, isProfileDownload: true)
-                    return true
+                    return await self.downloadManager.downloadFile(file, modName: modName, modId: modId, isProfileDownload: true)
                 } catch {
                     print("Error downloading mod \(entry.folderName): \(error)")
                     return false

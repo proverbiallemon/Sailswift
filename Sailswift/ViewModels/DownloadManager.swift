@@ -109,7 +109,9 @@ class DownloadManager: ObservableObject {
     }
 
     /// Download a file from GameBanana using fast URLSessionDownloadTask
-    func downloadFile(_ file: GameBananaFile, modName: String, modId: Int? = nil, isProfileDownload: Bool = false, targetFolder: URL? = nil) async {
+    /// - Returns: true if the download completed and installed at least one mod file
+    @discardableResult
+    func downloadFile(_ file: GameBananaFile, modName: String, modId: Int? = nil, isProfileDownload: Bool = false, targetFolder: URL? = nil) async -> Bool {
         var download = Download(filename: file.filename, modName: modName, fileId: file.fileId, modId: modId, isProfileDownload: isProfileDownload)
         download.status = .downloading
         download.statusMessage = "Starting download..."
@@ -152,20 +154,25 @@ class DownloadManager: ObservableObject {
                     : "Installed \(installedCount) files to \(displayFolder)/"
                 updateDownloadStatus(fileId: file.fileId, status: .completed, message: message)
                 showResult(success: true, message: message, isProfileDownload: isProfileDownload)
+                return true
             } else {
                 updateDownloadStatus(fileId: file.fileId, status: .failed, message: "No mod files found")
                 showResult(success: false, message: "No mod files found in archive", isProfileDownload: isProfileDownload)
+                return false
             }
 
         } catch DownloadError.sevenZipNotFound {
             updateDownloadStatus(fileId: file.fileId, status: .failed, message: "7-Zip required")
             on7zMissing?()
+            return false
         } catch DownloadError.rarMethodUnsupported {
             updateDownloadStatus(fileId: file.fileId, status: .failed, message: "unrar required")
             onUnrarMissing?()
+            return false
         } catch {
             updateDownloadStatus(fileId: file.fileId, status: .failed, message: error.localizedDescription)
             showResult(success: false, message: "Download failed: \(error.localizedDescription)", isProfileDownload: isProfileDownload)
+            return false
         }
 
         // Don't clear currentDownload here - keep it to show completion status
