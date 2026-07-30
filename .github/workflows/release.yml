@@ -47,18 +47,60 @@ jobs:
             ONLY_ACTIVE_ARCH=NO \
             build
 
-      - name: Re-sign Frameworks and App
+      - name: Import Developer ID certificate
+        env:
+          DEVELOPER_ID_CERT_P12: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
+          DEVELOPER_ID_CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
+        run: |
+          if [ -z "$DEVELOPER_ID_CERT_P12" ]; then
+            echo "DEVELOPER_ID_CERT_P12 secret is not set. Add the Developer ID Application certificate (base64 p12) before releasing."
+            exit 1
+          fi
+          echo "$DEVELOPER_ID_CERT_P12" | base64 --decode > cert.p12
+          security create-keychain -p ci-keychain build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p ci-keychain build.keychain
+          security import cert.p12 -k build.keychain -P "$DEVELOPER_ID_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k ci-keychain build.keychain
+          rm cert.p12
+          IDENTITY=$(security find-identity -v -p codesigning build.keychain | sed -n 's/.*"\(Developer ID Application[^"]*\)".*/\1/p' | head -1)
+          if [ -z "$IDENTITY" ]; then echo "No Developer ID Application identity found in the imported certificate."; exit 1; fi
+          echo "SIGNING_IDENTITY=$IDENTITY" >> $GITHUB_ENV
+
+      - name: Sign with Developer ID and hardened runtime
         run: |
           APP_PATH="build/Build/Products/Release/Sailswift.app"
-
-          # Re-sign Sparkle framework with ad-hoc signature
-          codesign --force --deep --sign - "$APP_PATH/Contents/Frameworks/Sparkle.framework"
-
-          # Re-sign the main app
-          codesign --force --deep --sign - "$APP_PATH"
-
-          # Verify
+          SPARKLE_FW="$APP_PATH/Contents/Frameworks/Sparkle.framework"
+          # Sparkle's nested executables first, then the framework, then the app.
+          codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" \
+            "$SPARKLE_FW/Versions/B/XPCServices/Installer.xpc" || true
+          codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" \
+            "$SPARKLE_FW/Versions/B/XPCServices/Downloader.xpc" || true
+          codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" \
+            "$SPARKLE_FW/Versions/B/Autoupdate" || true
+          codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" \
+            "$SPARKLE_FW/Versions/B/Updater.app" || true
+          codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$SPARKLE_FW"
+          codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$APP_PATH"
           codesign --verify --deep --strict "$APP_PATH"
+
+      - name: Notarize and staple app
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+        run: |
+          if [ -z "$APPLE_ID" ] || [ -z "$APPLE_TEAM_ID" ] || [ -z "$NOTARY_PASSWORD" ]; then
+            echo "Notarization secrets missing (APPLE_ID, APPLE_TEAM_ID, NOTARY_PASSWORD app-specific password)."
+            exit 1
+          fi
+          cd build/Build/Products/Release
+          ditto -c -k --keepParent Sailswift.app notarize-me.zip
+          xcrun notarytool submit notarize-me.zip \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$NOTARY_PASSWORD" \
+            --wait --timeout 90m
+          xcrun stapler staple Sailswift.app
+          rm notarize-me.zip
 
       - name: Create ZIP Archive
         run: |
@@ -71,6 +113,17 @@ jobs:
             -srcfolder build/Build/Products/Release/Sailswift.app \
             -ov -format UDZO \
             Sailswift-${{ steps.version.outputs.version }}.dmg
+
+      - name: Notarize and staple DMG
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+        run: |
+          xcrun notarytool submit Sailswift-${{ steps.version.outputs.version }}.dmg \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$NOTARY_PASSWORD" \
+            --wait --timeout 90m
+          xcrun stapler staple Sailswift-${{ steps.version.outputs.version }}.dmg
 
       - name: Download Sparkle
         run: |
@@ -185,15 +238,15 @@ jobs:
 
             **ZIP**: Extract and drag `Sailswift.app` to your Applications folder.
 
-            If you see a security warning, right-click the app and select "Open".
+            Releases are signed and notarized - no security warnings, no right-click dance.
 
             ### Auto-Update
             Sailswift automatically checks for updates. You can also check manually via **Sailswift → Check for Updates...**
 
             ### Homebrew
             ```
-            brew tap PocketBearDev/sailswift
-            brew install --cask sailswift
+            brew trust --cask pocketbeardev/sailswift/sailswift
+            brew install --cask pocketbeardev/sailswift/sailswift
             ```
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
